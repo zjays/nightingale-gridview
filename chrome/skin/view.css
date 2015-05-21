@@ -4,7 +4,8 @@ view{
 artist, album{
   /*-moz-border-radius: 15px 15px 15px 15px;*/
 }
-album[hover], artist[hover]{
+album[hover],
+artist[hover] {
   background-color: rgb(75,75,75);
 }
 album[selected], artist[selected]{
@@ -15,18 +16,6 @@ album[selected], artist[selected]{
 }
 artist[selected] .borderCanvas{
   display: block;
-}
-.albumArt {
-  /*-moz-border-radius: 5px;*/
-  border: 2px outset #000000;
-  max-width: 100px;
-  max-height: 100px;
-  min-height: 100px;
-  min-width: 100px;
-}
-albumblock[selected="true"] .albumBox > stack > .albumSelect {
-  /*border: 3px solid blue;*/
-  -moz-border-radius: 5px;
 }
 .spinnerBox {
   -moz-box-pack: end;
@@ -52,7 +41,6 @@ albumblock[selected="true"] .albumBox > stack > .albumSelect {
   width: 16px;
   height: 16px;
 }
-
 .playButtonBox {
   -moz-box-pack: end;
   -moz-box-align: center;
@@ -74,7 +62,6 @@ albumblock[selected="true"] .albumBox > stack > .albumSelect {
   width: 12px;
   height: 12px;
 }
-
 /**
  * The Songbird styles apply after these so they override some of the style settings :(
  */

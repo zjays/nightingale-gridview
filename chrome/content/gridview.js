@@ -1,13 +1,21 @@
 window.mediaPage.shortname = "gridview";
 window.mediaPage.view = null;
 window.mediaPage.initViewElement = function MF_initiateElement(){
-  //setup the flow binding
+  //setup the binding
   this.view = document.getElementById("birdview");
   this.view.defaultImage = {};
   this.view.defaultImage.url = this._getAlbumArtFromMediaItem(null);
   
   //this._artistFilter = this._mediaListView.cascadeFilterSet.appendFilter(SBProperties.artistName);
   this._artistFilter = null;
+  
+  var array = Cc["@songbirdnest.com/Songbird/Properties/MutablePropertyArray;1"]
+                .createInstance(Ci.sbIMutablePropertyArray);
+  array.strict = false;
+  array.appendProperty(SBProperties.artistName, "a");
+  array.appendProperty(SBProperties.albumName, "a");
+  this.mediaListView.setSort(array);
+  
   var filters = window.mediaPage.mediaListView.cascadeFilterSet;
   var len = filters.length;
   for (var i=0;i<len;i++){
@@ -26,36 +34,27 @@ window.mediaPage.initViewElement = function MF_initiateElement(){
     this._artistFilter = filters.appendFilter(SBProperties.artistName);
   }
   
-  var array = Cc["@songbirdnest.com/Songbird/Properties/MutablePropertyArray;1"]
-                .createInstance(Ci.sbIMutablePropertyArray);
-  array.strict = false;
-  array.appendProperty(SBProperties.artistName, "a");
-  array.appendProperty(SBProperties.albumName, "a");
-  this.mediaListView.setSort(array);
-  
   this.initiated = true;
 }
 //We don't display any filters in the artist view
-window.mediaPage._initPlaylist = function(aView){
+window.mediaPage._initPlaylist = function(){
   this._playlist = document.getElementById("playlist");
   //get the commands to use to bind the playlist
   var mgr =
     Components.classes["@songbirdnest.com/Songbird/PlaylistCommandsManager;1"]
               .createInstance(Components.interfaces.sbIPlaylistCommandsManager);
   var cmds = mgr.request(kPlaylistCommands.MEDIAITEM_DEFAULT);
-  
-  if (aView){
-    this._playlist.getListView().selection.removeListener(this);
-  } else
-    aView = this._mediaListView;
-  this._playlist.bind(this._mediaListView, cmds);
-  //Listen for selection changes to update the position of the flow
-  this._playlist.getListView().selection.addListener(this);
+  this._playlist.bind(this.mediaListView, cmds);
 }
 
 
 window.mediaPage.unloadViewElement = function MF_unloadElement(){
-  
+  var filters = window.mediaPage.mediaListView.cascadeFilterSet;
+  filters.clearAll();
+  var len = filters.length;
+  for (var i=len-1;i>=0;i--){
+    filters.remove(i);
+  }
 }
 /* called when resized by the splitter or when the containing window is resized */
 window.mediaPage.onResize = function AV_onResize(event){
@@ -77,10 +76,10 @@ window.mediaPage._getAlbumIndexInViewEle = function MF_getAlbumIndexInFlow(aAlbu
 }
 window.mediaPage.selectAlbumInViewEle = function MF_selectAlbumInViewEle(mAlbum,aMediaItem){
   var index = this._getAlbumIndexInViewEle(mAlbum,this._isSortedByTrack()?aMediaItem:null);
-  if (index != -1)
-    this._flow.glideToIndex(index);
-  else //not found
-    this._toSelect = mAlbum;
+  //if (index != -1)
+    //this._flow.glideToIndex(index);
+  //else //not found
+  //  this._toSelect = mAlbum;
   
 }
 /*
@@ -107,7 +106,7 @@ window.mediaPage._getAlbumItemFromMediaItem = function MF_getAlbumItemFromMediaI
 /*
   Add the album associated with this mediaitem to the end of the view
 */
-window.mediaPage._addAlbum = function MF_addAlbum(aMediaItem, aIndex) {
+window.mediaPage._addAlbum = function MF_addAlbum(aMediaItem) {
   var item = this._getAlbumItemFromMediaItem(aMediaItem);
   if (item){
     if (!item.equals(this._prev)){
@@ -129,7 +128,7 @@ window.mediaPage._insertAlbum = function MF_insertAlbum(aMediaItem, aIndex){
 
 window.mediaPage.removeAlbumFromViewEle = function MF_removeAlbumFromViewEle(aAlbum){
   /* That was the last track for the album, remove it from the flow */
-  var index = this._getAlbumIndexInFlow(aAlbum);
+  var index = 0;//this._getAlbumIndexInFlow(aAlbum);
   if (index != -1){
     //this._flow.removeIndex(index);
     //this._flow.glideToIndex(index-1);
@@ -164,13 +163,13 @@ window.mediaPage.removeAlbumFromViewEle = function MF_removeAlbumFromViewEle(aAl
 window.mediaPage.updateAlbumImage = function MF_updateAlbumImage(aMediaItem){
   var mAlbum = new Album(aMediaItem);
   //dump("item updated: "+mAlbum.name+"\n");
-  var index = this._getAlbumIndexInFlow(mAlbum);
+  var index = -1;//this._getAlbumIndexInFlow(mAlbum);
   //dump("index: "+index+"\n");
   if (index!=-1){
     //var node = this._flow.itemNodes[index];
     //var item = this._getAlbumItemFromMediaItem(node);
     var item = this._getAlbumItemFromMediaItem(aMediaItem);
-    this._flow.replaceIndex(index,item);
+    //this._flow.replaceIndex(index,item);
   }
 }
 /**
@@ -191,16 +190,11 @@ window.mediaPage.getClickInfo = function MF_getClickInfo(aEvent){
   var ret = null;
   if (item){
     ret = {};
-    ret.album = item.album;
+    ret.item = item.item;
     ret.mediaitem = item.mediaitem;
   } 
   return ret;
 }
-window.mediaPage.playArtist = function MF_playArtist(aArtist){
-  var playView = this.mediaListView;//.clone();
-  
-  if (!aArtist.hasAttribute("selected")){
-    this.select(aArtist);
-  } 
-  gMM.sequencer.playView(playView, Ci.sbIMediacoreSequencer.AUTO_PICK_INDEX);
+window.mediaPage._getItemGroup = function MF_getItemGroup(aMediaItem){
+  return new Album(aMediaItem);
 }

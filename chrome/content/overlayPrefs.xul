@@ -15,10 +15,10 @@
                     type="bool"/>
       </preferences>
       <vbox>
-		<groupbox>
-			<caption label="&gridview.prefs.general.groupcaption;"/>
-			<checkbox label="&gridview.prefs.general.ignoreAlbumArtist;" preference="extensions.gridview.ignoreAlbumArtist"/>
-		</groupbox>
+        <groupbox>
+          <caption label="&gridview.prefs.general.groupcaption;"/>
+          <checkbox label="&gridview.prefs.general.ignoreAlbumArtist;" preference="extensions.gridview.ignoreAlbumArtist"/>
+        </groupbox>
       </vbox>
     </prefpane>
   </prefwindow>

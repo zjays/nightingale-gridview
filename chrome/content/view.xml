@@ -59,7 +59,7 @@
           //dump("ele: "+ele.tagName+"\n");
           if (ele){
             var item = {
-              album: new Album(ele.name,ele.artist),
+              item: new Artist(ele.artist),
               mediaitem: ele.mediaitem
             }
             return item;
@@ -85,6 +85,8 @@
           }
           //add the current artist to the list
           artists.push(aEle.artist);
+          dump("artist: "+aEle.artist+"\n");
+          dump(artists+"\n");
           filters.set(window.mediaPage._artistFilter,artists,artists.length);
         ]]>
         </body>
@@ -191,12 +193,12 @@
       <method name="playArtist">
         <parameter name="aEle" />
         <body><![CDATA[
-          var playView = window.mediaPage.mediaListView;//.clone();
-  
           if (!aEle.hasAttribute("selected")){
             this.select(aEle);
-          } 
-          gMM.sequencer.playView(playView, Ci.sbIMediacoreSequencer.AUTO_PICK_INDEX);
+          }
+          
+          var current = new Artist(aEle.artist);
+          window.mediaPage.play(current);
         ]]></body>
       </method>
     </implementation>
@@ -227,7 +229,7 @@
                       xbl:inherits="collapsed=hideSearch">
               <xul:box class="spinnerBackground">
                 <xul:image class="spinnerImage"
-                           src="chrome://albumview/skin/searching.png"/>
+                           src="chrome://gridview/skin/searching.png"/>
               </xul:box>
             </xul:vbox>
   
@@ -237,13 +239,13 @@
                       collapsed="true"
                       xbl:inherits="collapsed=hidePlaying">
               <xul:image class="playingImage"
-                         src="chrome://albumview/skin/playing.png"/>
+                         src="chrome://gridview/skin/playing.png"/>
             </xul:vbox>
   
             <!-- Play button -->
             <xul:vbox class="playButtonBox"
                       anonid="sb-group-play"
-                      collapsed="false"
+                      collapsed="true"
                       xbl:inherits="collapsed=hidePlay">
               <xul:hbox class="playButton"
                         tooltiptext="Click to play"
@@ -251,7 +253,7 @@
                 <xul:label class="playButtonLabel"
                            value="Play"/>
                 <xul:image class="playButtonImage"
-                           src="chrome://albumview/skin/playing.png"/>
+                           src="chrome://gridview/skin/playing.png"/>
               </xul:hbox>
               <xul:spacer height="25"/>
             </xul:vbox>
@@ -330,6 +332,21 @@
           this.albums.push(aAlbum);
           if (this.albums.length>=6)
             return;//don't redraw
+          //move the default covers to the back of the list because they don't represent
+          //what the artist looks like
+          if (this.albums.length>1){
+            var end = this.albums.length;
+            for (i=0;i<end;i++){
+              //dump("name: "+this.albums[i].artist+" - "+this.albums[i].name+"\n");
+              //dump("img: "+this.albums[i].image+"\n");
+              if (this.albums[i].image==window.mediaPage.defaultCover){
+                //dump("moving album to back\n");
+                var album = this.albums.splice(i,1);
+                this.albums.push(album);
+                end--;
+              }
+            }
+          }
           try{
           var canvas = document.getAnonymousElementByAttribute
                             (this,"anonid","albumPile");
@@ -363,81 +380,42 @@
             bctx.translate(x+hoffset, y+voffset);
             bctx.rotate(angle);
             
-            ctx.drawImage(image,0,0,size,size);
-            
-            if (degree==0 || image.src!=defaultImage)
-              bctx.strokeRect(0,0,size,size);
-            
-            bctx.restore();
             try{
               ctx.drawImage(image,0,0,size,size);
+              if (degree==0 || image.src!=defaultImage)
+                bctx.strokeRect(0,0,size,size);
             }catch(e){
               //catch this incase the image is not loaded  or is just bad
               //we need to make sure we restore this if there is a problem
               //or else the rest of the albums will be drawn over the edge
+              dump("addAlbumErr: "+e+"\n");
             }
+            bctx.restore();
             ctx.restore();
           }
-          //for (var i=this.albums.length-1;i>=0;i--){
+          //make sure the albums get drawn in the correct order... also don't draw
+          //too much at a time, win win. Therefore we wait for each to load before loading
+          //the next album
           var albums = this.albums;
           function drawAlbum(i){
             let (img = new Image()){
-              img.onload = function(){
+              function imgloaded(){
                 draw(0-i*10,img);
                 if (i>0)
                   drawAlbum(i-1);
               }
+              img.onload = imgloaded;
               img.src = albums[i].image;
+              if (img.complete)
+                imgloaded();
             }
           }
           drawAlbum(this.albums.length-1);
-          //this.drawBorder();
-          //}
           }catch(e){
             dump(e+"\n");
           }
         ]]>
         </body>
-      </method>
-      <method name="drawBorder">
-        <body><![CDATA[
-          var canvas = document.getAnonymousElementByAttribute
-                            (this,"anonid","borderCanvas");
-          var ctx = canvas.getContext("2d");
-          var size = 102;
-          var x=(this._size-size)/2;
-          var y=x;
-          function draw(degree){
-            ctx.save();
-            var angle=degree*Math.PI/180;
-            //length from left to pivot point
-            var leftwidth = size*Math.sin(angle);
-            //width of rotated square
-            var rwidth = size*Math.sin(angle)+size*Math.cos(angle);
-            //diff between rotated square and normal square
-            var diff = (rwidth-size)/2;
-            //offset from left of normal square to left of rotated
-            var hoffset=Math.floor(leftwidth-diff);
-            //offset from top of normal square to top of rotated (rotatedheight-height/2)
-            var voffset=-Math.floor((size*Math.sin(angle)+size*Math.cos(angle)-size)/2);
-            ctx.translate(x+hoffset, y+voffset);
-            ctx.rotate(angle);
-            
-            ctx.lineWidth = 3;
-            
-            ctx.strokeRect(0,0,size,size);
-            ctx.restore();
-          }
-          //for (var i=this.albums.length-1;i>=0;i--){
-          var albums = this.albums;
-          ctx.strokeStyle = "rgb(0, 0, 200)";
-          function drawAlbum(i){
-            draw(0-i*10);
-            if (i>0)
-              drawAlbum(i-1);
-          }
-          drawAlbum(this.albums.length-1);
-        ]]></body>
       </method>
       <method name="playArtist">
         <parameter name="aEvent" />
@@ -506,9 +484,13 @@
       ]]></handler>
       <handler event="mouseover">
         this.setAttribute("hover","true");
+        document.getAnonymousElementByAttribute
+              (this,"anonid","sb-group-play").setAttribute("collapsed","false");
       </handler>
       <handler event="mouseout">
         this.removeAttribute("hover");
+        document.getAnonymousElementByAttribute
+              (this,"anonid","sb-group-play").setAttribute("collapsed","true");
       </handler>
     </handlers>
   </binding>

@@ -92,7 +92,7 @@ window.mediaPage = {
       var KeyEvent = Ci.nsIDOMKeyEvent;
       switch(event.keyCode){
         case KeyEvent.DOM_VK_LEFT:
-          window.mediaPage._flow.handleOffset(1);
+          window.mediaPage._flow.handleOffset(1)
           break;
         case KeyEvent.DOM_VK_RIGHT:
           window.mediaPage._flow.handleOffset(-1);
@@ -129,6 +129,11 @@ window.mediaPage = {
     this._mediaList = this._mediaListView.mediaList;
     //Listen for items added, removed, and modified in this list
     this._mediaList.addListener(this);
+    this.mediaListView.addListener(this);
+    this._preferences = Cc['@mozilla.org/preferences-service;1']
+                        .getService(Ci.nsIPrefBranch);
+    this._sbVersion = this._preferences
+                          .getCharPref("extensions.lastAppVersion");
 
     var view = this._mediaListView;
     Album.prototype.ignoreAlbumArtist = Application.prefs.getValue("extensions."+this.shortname+".ignoreAlbumArtist", false)
@@ -136,21 +141,18 @@ window.mediaPage = {
     if (selectedItem){
       this._currentAlbum = new Album(selectedItem)
     }
+    dump("initviewelement\n");
+    this.initViewElement();
+    this._initPlaylist();
+    dump("get albums\n");
+    this._getAlbums();
     
     /* Attach context menu */
     this.context.init(null);
 
     /* Resize the canvas when the page resizes */
     window.addEventListener('resize',function(event){window.mediaPage.onResize(event);},false);
-    
-    //We need to wait a bit, don't flip songbird out. The sort can take some time.
-    let (self = this){
-      setTimeout(function(){
-        self.initViewElement();
-        self._initPlaylist();
-        self._getAlbums();
-      },0);
-    }
+    dump("finished load\n");
   },
 
   /**
@@ -160,6 +162,7 @@ window.mediaPage = {
     this.initiated = false;
     if (this._mediaList)
       this._mediaList.removeListener(this);
+    this.mediaListView.removeListener(this);
     
     this.unloadViewElement();
     
@@ -169,6 +172,16 @@ window.mediaPage = {
       this._playlist.destroy();
       this._playlist = null;
     }
+  },
+
+  showFullscreen: function MF_showFullscreen(event){
+    /*
+    dump("showFullscreen\n");
+    var win = window.openDialog("chrome://mediaflow/content/fullscreen-page.xul",
+                      top.name,
+                      "width="+screen.width+",height="+screen.height+",top=0,left=0,fullscreen=true,chrome=yes,titlebar=no",
+                      this.mediaListView);
+    */
   },
 
   /**
@@ -196,23 +209,66 @@ window.mediaPage = {
   },
   
   /*
+    This is called when the mediaflow scrolls to another item
+    It should select the index in the tree/playlist matching
+    the newly selected item
+  */
+  selectIndex : function AV_selectIndex(aMediaItem){
+    if (!aMediaItem) return;
+    var view = this._playlist.getListView();
+    var selectedItem = view.selection.currentMediaItem;
+    var albumSelected = false;
+    var toSelectAlbum = new Album(aMediaItem);
+    if (selectedItem){
+      this._currentAlbum = new Album(selectedItem);
+      if (this._currentAlbum.equals(toSelectAlbum)){
+        albumSelected = true;
+      }
+    }
+    if (!albumSelected){
+      this._ignoreSelect = true;
+      this._currentAlbum = toSelectAlbum;
+
+      var sort = view.currentSort;
+      var sortby = sort.getPropertyAt(0).id;
+      if (sortby == SBProperties.trackName){//TODO: select the next media item in the list
+        var index = view.getIndexForItem(aMediaItem);
+        if (index>-1){
+          view.selection.selectOnly(index);
+          this._playlist.tree.treeBoxObject.ensureRowIsVisible(index);
+        }
+      } else 
+        this._selectItemsInAlbum(toSelectAlbum, true);
+
+      this._ignoreSelect = false;
+      this.context.refreshCommands(true);
+
+      if (this._currentAlbum.equals(this._shouldPlayAlbum)){
+        this.playAlbum();
+        this._shouldPlayAlbum = null;
+      }
+    }
+  },
+  
+  /*
    Selects the items in the album
   */
-  _selectMediaInItem: function MF_selectMediaInItem(aItem,aSingleSelect){
+  _selectItemsInAlbum: function MF_selectItemsInAlbum(aAlbum,aSingleSelect){
     var view = this._playlist.getListView();
     
+    //dump("selectItemsInAlbum:"+aAlbum+"\n");
     var firstIndex = view.length;
     var lastIndex = -1;
-    var items = view.mediaList.getItemsByProperty(aItem.property, aItem.name);
+    var items = view.mediaList.getItemsByProperty(SBProperties.albumName, aAlbum.name);
     var itr = items.enumerate();
     if (!aSingleSelect)
       view.selection.selectNone();
     while (itr.hasMoreElements()){
-      var mediaitem = itr.getNext();
+      var item = itr.getNext();
       try{
         //Make sure this is part of the same album
-        if (buildItem(mediaitem,aItem.property).equals(aItem)){
-          var i = view.getIndexForItem(mediaitem);
+        if (new Album(item).equals(aAlbum)){
+          var i = view.getIndexForItem(item);
           if (i<firstIndex)
             firstIndex = i;
           if (i>lastIndex)
@@ -249,49 +305,69 @@ window.mediaPage = {
     this._currentAlbum = mAlbum;
     this.selectAlbumInViewEle(mAlbum,aMediaItem);
   },
-  
   /*
-   play the first track in the currently selected group. If it is alread playing,
-   cycle through the other tracks in the group and play the next track
+   play the first track in the currently selected album. If it is alread playing,
+   cycle through the other tracks in the album and play the next track
   */
-  play: function ML_play(aCurrent){
-    var playView = window.mediaPage.mediaListView;
-    var index = -1;//Ci.sbIMediacoreSequencer.AUTO_PICK_INDEX;
-    var playing = gMM.sequencer.currentItem?(new Artist(gMM.sequencer.currentItem)):null;
-    //dump("prop: "+aCurrent.property+", "+aCurrent.name+"\n");
-    var items = playView.mediaList.getItemsByProperty(aCurrent.property, aCurrent.name);
-    //if (gMM.sequencer && gMM.sequencer.view == playView){
-    var itr = items.enumerate();
-    var firstIndex = playView.length;
-    var firstItem = null;
-    var playingIndex = -1;
-    try{
-      playingIndex = gMM.sequencer.viewPosition;
-    }catch(e){}
-    var playIndex = -1;
-    while (playIndex==-1 && itr.hasMoreElements()){
-      var item = itr.getNext();
-      var i = this.mediaListView.getIndexForItem(item);
-      if (i<firstIndex){
-        firstIndex = i;
-        firstItem = item;
+  playAlbum : function MF_playAlbum(){
+    var playingItem, playingAlbum = null, playingTrack;
+    if (gMM.sequencer.view){
+      playingItem = gMM.sequencer.view.getItemByIndex(gMM.sequencer.viewPosition);
+      playingAlbum = new Album(playingItem);
+      playingTrack = playingItem.getProperty(SBProperties.trackName);
+    }
+    if (playingAlbum && playingAlbum.equals(this._currentAlbum)){
+      /* try to find the next track in the current album */
+      var view = this.mediaListView;
+      var playIndex = -1, playItem = null;
+      var playingIndex = view.getIndexForItem(playingItem);
+      
+      var firstIndex = view.length, firstItem = null;
+      var items = view.mediaList.getItemsByProperty(SBProperties.albumName, playingAlbum.name);
+      var itr = items.enumerate();
+      while (!playItem && itr.hasMoreElements()){
+        var item = itr.getNext();
+        if (new Album(item).equals(playingAlbum)){//Make sure it is from the same album/artist
+          var i = view.getIndexForItem(item);
+          if (i<firstIndex){
+            firstIndex = i;
+            firstItem = item;
+          }
+          if (i-1 == playingIndex){
+            playIndex = i;
+            playItem = item;
+          }
+        }
       }
-      if (i > playingIndex){
-        playIndex = i;
-        break;
+      if (playIndex == -1 && firstIndex!=view.length){
+        playItem = firstItem;
+        playIndex = firstIndex;
+      }
+      if (playItem && playItem.guid != playingItem.guid){
+        this._ignoreSelect = true;
+        view.selection.selectOnly(playIndex);
+        var tree = this._playlist.tree;
+        tree.treeBoxObject.ensureRowIsVisible(playIndex);
+        this._ignoreSelect = false;
       }
     }
-    if (playIndex==-1)
-      index = firstIndex;
-    else
-      index = playIndex;
-    //}
-    //if (index == -1)
-    //  index = items.queryElementAt(0,Ci.sbIMediaItem);
-    this._playlist.tree.treeBoxObject.ensureRowIsVisible(index);
-    gMM.sequencer.playView(playView, index);
+    this._playlist.sendPlayEvent();
   },
   
+  /*
+   From double or middle clicking an album in the flow
+  */
+  performAction : function AV_performAction(aMediaItem, aEvent){
+    var mAlbum = new Album(aMediaItem);
+    if (mAlbum.equals(this._currentAlbum)){
+      this.playAlbum();
+    } else {/* still scrolling... */
+      this._shouldPlayAlbum = mAlbum;
+      //if (!this._currentAlbum)
+        this.selectIndex(aMediaItem);
+        this.selectAlbum(aMediaItem);
+    }
+  },
   /* remove items from the medialist that belong to the passed in album
     this will also need to be changed to adjust for multiple albums with the same
     name
@@ -309,12 +385,12 @@ window.mediaPage = {
     }
   },
 
-  /* select the items in the group and then open the edit metadata window
+  /* select the items in the album and then open the edit metadata window
      will need to be modified to support multiple same named albums
   */
-  editItem: function MF_editItem(aItem){
+  editAlbum: function MF_editAlbum(aAlbum){
     this._ignoreSelect = true;
-    this._selectMediaInItem(aItem, false);
+    this._selectItemsInAlbum(aAlbum, false);
     this._ignoreSelect = false;
 
     SBTrackEditorOpen("edit");
@@ -324,16 +400,16 @@ window.mediaPage = {
    * returns an nsISimpleEnumerator of the items in the given album,
    * excludes albums with the same name but different artists
    */
-  getMediaInGroup: function MF_getMediaInGroupa(aGroup){
+  getItemsForAlbum: function MF_getItemsForAlbum(aAlbum){
     var items = this.mediaListView.mediaList.getItemsByProperty(
-                               aGroup.property, aGroup.name);
+                               SBProperties.albumName, aAlbum.name);
     var itr = items.enumerate();
     var array = Components.classes["@mozilla.org/array;1"]
                   .createInstance(Components.interfaces.nsIMutableArray);
 
     while (itr.hasMoreElements()){
       var item = itr.getNext();
-      if (buildItem(item,aGroup.property).equals(aGroup)){//Make sure it is from the same album/artist
+      if (new Album(item).equals(aAlbum)){//Make sure it is from the same album/artist
         //albumItems.push(item);
         array.appendElement(item,false);
       }
@@ -372,9 +448,8 @@ window.mediaPage = {
     loads the albums in the medialist
   */
   _getAlbums: function MF_getAlbums(){
-    var view = this.mediaListView.clone();
+    var view = this.mediaListView;
     var len = this._mediaList.length;
-    
     let (mf = this){
       this._toSelect = this._currentAlbum;
       function loadAlbums(){
@@ -417,52 +492,34 @@ window.mediaPage = {
       }
       increment();    
     }
-    /*
-    let (mf = this){
-      this._toSelect = this._currentAlbum;
-      function loadAlbums(){
-        var count=0, limit=5, changeLength = 30, changeLimit=3;
-        for (var i = 0;i<len;i++){
-          try{
-            var item = view.getItemByIndex(i);
-            if (mf._addAlbum(item, i)){
-              count++;
-              if (count>=limit){
-                count=0;
-                if (limit!=changeLimit && i>changeLength)
-                  limit = changeLimit;
-                yield true;
-              }
-            }
-          }catch(e){
-            dump(i+") "+e+"\n");
-          }
-        }
-        yield -1;
-      }
-      mf.albums = loadAlbums();
-      function increment(){
-        if (mf.initiated && mf.albums){
-          if (mf.albums.next()!=-1){
-            setTimeout(function(){
-              increment();
-            },0)
-          } else {
-            mf.albums.close();
-            mf.albums = null;
-          }
-        } else {
-          if (mf.albums){
-            mf.albums.close();
-          }
-          mf.albums = null;
-        }
-      }
-      increment();    
-    }
-    */
   },
   
+  /* sbIMediaListViewSelection */
+  onSelectionChanged: function MF_onSelectionChanged() {
+    if (!this._ignoreSelect){
+      var view = this._mediaListView;
+      var selection = view.selection;
+      var selectedItem = selection.currentMediaItem;
+      var albumSelected = false;
+      if (selectedItem){
+        var selectedAlbum = new Album(selectedItem);
+        var toSelectAlbum = null;
+        if (selectedAlbum.equals(this._currentAlbum)){
+          albumSelected = true;
+        }
+        if (!albumSelected || !this._currentAlbum){
+          this._ignoreSelect = true;
+          this.selectAlbum(selectedItem);
+          this._ignoreSelect = false;
+        }
+      }
+    }
+  },
+
+  onCurrentIndexChanged: function MF_onCurrentIndexChanged(){
+
+  },
+
   _processAlbumChanged : function MF_processAlbumChanged(aAlbum){
     if (aAlbum && aAlbum.name!=""){
       var items = null;
@@ -582,6 +639,28 @@ window.mediaPage = {
     this._inBatch = false;
   },
 
+  /* sbIMediaListViewListener */
+  onFilterChanged: function MFVL_onFilterChanged(aChangedView){
+    this._updateView(aChangedView);
+  },
+  onSearchChanged: function MFVL_onSearchChanged(aChangedView){
+    dump("search changed\n");
+    this._updateView(aChangedView);
+  },
+  onSortChanged: function MFVL_onSortChanged(aChangedView){
+    dump("sort changed\n");
+    this._updateView(aChangedView);
+  },
+  
+  /**
+   * sbIAlbumArtListener
+   */
+  onAlbumArtChange: function MF_onAlbumArtChange(aMediaItem) {
+    
+  },
+
+  onAlbumArtChangeError: function MF_onAlbumArtChangeError(aMediaItem) {},
+
   toString: function(){
     return "MediaFlow media page\n";
   },
@@ -599,7 +678,7 @@ window.mediaPage = {
 window.mediaPage.context = {
   get parent(){return window.mediaPage},
   sbCommands: null,
-  item: null,
+  album: null,
   _fetchers : [],
   init: function MFC_Init(aCommands){
     //var target = this.parent.getContextTarget();
@@ -628,13 +707,24 @@ window.mediaPage.context = {
   },
   onShowing: function MFC_onShowing(aEvent){
     var info = this.parent.getClickInfo(aEvent);
-    this.parent.view.select(document.popupNode);
     dump("info: "+info+"\n");
-    if (info){
-      this.item = info.item;
+    if (info==null || !info){
+      this.album = this._currentAlbum;
+      if (this.album){
+        var item = this.parent.mediaListView.mediaList.
+          getItemsByProperty(SBProperties.albumName, this.album.name);
+        var i=0;
+        do {//make sure the mediaitem has the correct album artist
+          this.mediaitem = item.queryElementAt(i,Ci.sbIMediaItem);
+          i++;
+        } while(!(new Album(this.mediaitem).equals(this.album)));
+      } else
+        return false;
+    } else {
+      this.album = info.album;
       this.mediaitem = info.mediaitem;
-    } else
-      return false;
+    }
+    dump("album: "+this.album+"\n");
     return true;
   },
   onShown: function MFC_onShown(aEvent){
@@ -643,23 +733,23 @@ window.mediaPage.context = {
   onHidden: function MFC_onHidden(aEvent){
     //this.sbCommands.clearDeferRefresh();
   },
-  playItem: function MFC_playItem(aEvent){
+  playItem: function MFC_playAlbum(aEvent){
     /* perform action will call the main playAlbum */
-    this.parent.play(this.item);
+    this.parent.performAction(this.mediaitem, aEvent);
     //this.selectIndex(this.mediaitem);
   },
-  removeItem: function MFC_removeItem(aEvent){
-    this.parent.removeItem(this.item);
+  removeItem: function MFC_removeAlbum(aEvent){
+    this.parent.removeAlbum(this.album);
   },
-  editItem: function MFC_editItem(aEvent){
-    this.parent.editItem(this.item);
+  editItem: function MFC_editAlbum(aEvent){
+    this.parent.editAlbum(this.album);
   },
   getCover: function MFC_getCover(aEvent){
-    var enume = this.parent.getMediaInGroup(this.item);
+    var enume = this.parent.getItemsForAlbum(new Album(this.mediaitem));
     sbCoverHelper.getArtworkForItems(enume, null);
   },
   clearCover: function MFC_clearCover(aEvent){
-    var items = this.parent.getMediaInGroup(this.item);
+    var items = this.parent.getItemsForAlbum(new Album(this.mediaitem));
     while (items.hasMoreElements()){
       var item = items.getNext();
       item.setProperty(SBProperties.primaryImageURL,"");
@@ -712,11 +802,4 @@ function Artist(arg1){
 Artist.prototype.property = SBProperties.artistName;
 Artist.prototype.equals = function Art_equals(aArtist){
   return typeof this == typeof aArtist && aArtist && this.name == aArtist.name;
-}
-function buildItem(aItem, aProperty){
-  if (aProperty == Album.prototype.property)
-    return new Album(aItem);
-  else if (aProperty == Artist.prototype.property){
-    return new Artist(aItem);
-  }
 }

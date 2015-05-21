@@ -1,0 +1,10 @@
+<!ENTITY albumart.getartwork "Get Artwork">
+<!ENTITY albumart.clearartwork "Clear Artwork">
+<!ENTITY settings.label "Settings">
+<!ENTITY settings.showfilterpane "Show Filter Pane">
+<!ENTITY settings.hidefilterpane "Hide Filter Pane">
+
+<!ENTITY gridview.prefs.title "Grid View">
+
+<!ENTITY gridview.prefs.general.groupcaption "General Settings">
+<!ENTITY gridview.prefs.general.ignoreAlbumArtist "Ignore Album Artist property">

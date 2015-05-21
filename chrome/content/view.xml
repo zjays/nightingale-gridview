@@ -1,0 +1,599 @@
+<?xml version="1.0"?>
+<!DOCTYPE bindings PUBLIC "-//MOZILLA//DTD XBL V1.0//EN" "http://www.mozilla.org/xbl">
+
+<bindings
+    xmlns="http://www.mozilla.org/xbl"
+    xmlns:xbl="http://www.mozilla.org/xbl"
+    xmlns:html="http://www.w3.org/1999/xhtml"
+    xmlns:xhtml="http://www.w3.org/TR/xhtml1/strict"
+    xmlns:xul="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
+
+  <binding id="gridviewbody">
+    <resources>
+      <stylesheet src="chrome://gridview/skin/view.css"/>
+    </resources>
+    <content flex="1">
+      <xul:vbox anonid="innerContent" style="display: block; overflow: auto; -moz-box-flex: 1;">
+        
+      </xul:vbox>
+    </content>
+    <implementation>
+      <constructor><![CDATA[
+        let (t = this) {
+          setTimeout(function(){
+            //leave room for the sidebar
+            t.innerContent.setAttribute("width",t.parentNode.boxObject.width);
+          });
+        }
+     ]]>
+      </constructor>
+      <field name="selection">[]</field>
+      <field name="_innerContent">null</field>
+      <property name="innerContent">
+        <getter>
+          if (!this._innerContent)
+            this._innerContent = document.getAnonymousElementByAttribute
+                            (this,"anonid","innerContent");
+          return this._innerContent;
+        </getter>
+      </property>
+      <method name="addAlbum">
+        <parameter name="aAlbum"/>
+        <body><![CDATA[
+          var last = this.innerContent.lastChild;
+          if (last && last.type=="artist" && last.artist==aAlbum.artist){
+            last.addAlbum(aAlbum);
+          } else {
+            var ele = document.createElement("artist");
+            this.innerContent.appendChild(ele);
+            ele.init(aAlbum.artist);
+            ele.addAlbum(aAlbum);
+          }
+        ]]></body>
+      </method>
+      <method name="getClickTarget">
+        <parameter name="event"/>
+        <body><![CDATA[
+          //var ele = this._lastClicked;
+          var ele = document.popupNode;
+          //dump("ele: "+ele.tagName+"\n");
+          if (ele){
+            var item = {
+              album: new Album(ele.name,ele.artist),
+              mediaitem: ele.mediaitem
+            }
+            return item;
+          } else
+            return null;
+        ]]></body>
+      </method>
+      <method name="select">
+        <parameter name="aEle"/>
+        <body><![CDATA[
+          var artists = [];
+          var filters = window.mediaPage.mediaListView.cascadeFilterSet;
+          if (!aEle.hasAttribute("selected")){
+            aEle.setAttribute("selected","true");
+            this.selection.push(aEle);
+          }
+          for (var i=this.selection.length-1;i>=0;i--){
+            var ele=this.selection[i];
+            if (ele!=aEle){
+              ele.removeAttribute("selected");
+              this.selection.splice(i,1);
+            }
+          }
+          //add the current artist to the list
+          artists.push(aEle.artist);
+          filters.set(window.mediaPage._artistFilter,artists,artists.length);
+        ]]>
+        </body>
+      </method>
+      <method name="selectToggle">
+        <parameter name="aEle"/>
+        <body><![CDATA[
+          var artists = [];
+          var filters = window.mediaPage.mediaListView.cascadeFilterSet;
+          var values = filters.get(window.mediaPage._artistFilter);
+          var itr = values.enumerate();
+          while(itr.hasMoreElements()){
+            var val = itr.getNext();
+            val instanceof Ci.nsISupportsString;
+            val = val.toString();
+            if (val!=aEle.artist)
+              artists.push(val);
+          }
+          if (aEle.hasAttribute("selected")){
+            aEle.removeAttribute("selected");
+            var idx=this.selection.indexOf(aEle);
+            if (idx>-1){
+              this.selection.splice(idx,1);
+            }
+          } else {
+            aEle.setAttribute("selected","true");
+            this.selection.push(aEle);
+            artists.push(aEle.artist);
+          }
+          filters.set(window.mediaPage._artistFilter,artists,artists.length);
+        ]]>
+        </body>
+      </method>
+      <method name="selectRange">
+        <parameter name="aStart"/>
+        <parameter name="aEnd"/>
+        <body><![CDATA[
+          var startIndex = Array.indexOf(aStart.parentNode.childNodes,aStart);
+          var endIndex = Array.indexOf(aEnd.parentNode.childNodes,aEnd);
+          var artists = [];
+          var filters = window.mediaPage.mediaListView.cascadeFilterSet;
+          if (startIndex == endIndex){
+            this.select(aEle);
+          } else {
+            artists.push(aStart.artist);
+            //remove the rest from the selection
+            for (var i=this.selection.length-2;i>=0;i--){
+              var ele = this.selection[i];
+              ele.removeAttribute("selected");
+              this.selection.splice(i,1);
+            }
+            var prop = "nextSibling"
+            if (endIndex<startIndex){
+              prop = "previousSibling";
+            }
+            var ele = aStart;
+            while (ele!=aEnd){
+              ele=ele[prop];
+              //select this element
+              artists.push(ele.artist);
+              ele.setAttribute("selected","true");
+              //add it to the beginning so if there is another shift style selection
+              //the start of it will always be at the end of the array
+              this.selection.unshift(ele);
+            }   
+            filters.set(window.mediaPage._artistFilter,artists,artists.length);
+          }
+        ]]>
+        </body>
+      </method>
+      <method name="selectAll">
+        <body><![CDATA[
+          this.selectRange(this.innerContent.firstChild,this.innerContent.lastChild);
+        ]]></body>
+      </method>
+      <method name="toggleSelect">
+        <parameter name="aEle"/>
+        <parameter name="aState"/>
+        <body><![CDATA[
+          if (!aEle)
+            return;
+          //shift
+          if (aState == 2){
+            if (this.selection.length==0)
+              aState = 0;//Just select it like normal
+            else{
+              var start = this.selection[this.selection.length-1];
+              var end   = aEle;
+              
+              this.selectRange(start,end);
+            }
+          }
+          //cmd or control, flexible multi select
+          if (aState == 1){
+            this.selectToggle(aEle);
+          }
+          //regular
+          if (aState == 0){
+            this.select(aEle);
+          }
+        ]]>
+        </body>
+      </method>
+      <method name="playArtist">
+        <parameter name="aEle" />
+        <body><![CDATA[
+          var playView = window.mediaPage.mediaListView;//.clone();
+  
+          if (!aEle.hasAttribute("selected")){
+            this.select(aEle);
+          } 
+          gMM.sequencer.playView(playView, Ci.sbIMediacoreSequencer.AUTO_PICK_INDEX);
+        ]]></body>
+      </method>
+    </implementation>
+  </binding>
+  
+  <binding id="artist">
+    <content context="gridview-view-context">
+      <xul:hbox align="center">
+        <xul:vbox>
+          <xul:stack xbl:inherits="tooltiptext=albumName">
+            <!-- border -->
+            <html:canvas anonid="borderCanvas" class="borderCanvas" collapsed="false">
+            
+            </html:canvas>
+            
+            <!-- Album Cover(s) -->
+            <!-- We should respect aspect ratio for this -->
+            <html:canvas anonid="albumPile">
+            
+            </html:canvas>
+            
+            <xul:box class="albumSelect" flex="1" />
+  
+            <!-- Searching Spinner -->
+            <xul:vbox class="spinnerBox" hidden="true"
+                      anonid="sb-album-spinner"
+                      collapsed="true"
+                      xbl:inherits="collapsed=hideSearch">
+              <xul:box class="spinnerBackground">
+                <xul:image class="spinnerImage"
+                           src="chrome://albumview/skin/searching.png"/>
+              </xul:box>
+            </xul:vbox>
+  
+            <!-- Playing indicator -->
+            <xul:vbox class="playingBox"
+                      anonid="sb-album-playing"
+                      collapsed="true"
+                      xbl:inherits="collapsed=hidePlaying">
+              <xul:image class="playingImage"
+                         src="chrome://albumview/skin/playing.png"/>
+            </xul:vbox>
+  
+            <!-- Play button -->
+            <xul:vbox class="playButtonBox"
+                      anonid="sb-group-play"
+                      collapsed="false"
+                      xbl:inherits="collapsed=hidePlay">
+              <xul:hbox class="playButton"
+                        tooltiptext="Click to play"
+                        onclick="document.getBindingParent(this).playArtist(event);">
+                <xul:label class="playButtonLabel"
+                           value="Play"/>
+                <xul:image class="playButtonImage"
+                           src="chrome://albumview/skin/playing.png"/>
+              </xul:hbox>
+              <xul:spacer height="25"/>
+            </xul:vbox>
+  
+          </xul:stack>
+          
+          <xul:label crop="end" value="" anonid="artistName" class="artistName"/>
+        </xul:vbox>
+      </xul:hbox>
+    </content>
+    <implementation>
+      <constructor><![CDATA[
+        var size = this._size;
+        var canvas = document.getAnonymousElementByAttribute
+                            (this,"anonid","albumPile");
+        canvas.setAttribute("width",size);
+        canvas.setAttribute("height",size);
+        canvas.parentNode.setAttribute("width",size);
+        canvas.parentNode.setAttribute("height",size);
+        canvas.parentNode.setAttribute("maxwidth",size);
+        canvas.parentNode.setAttribute("maxheight",size);
+        
+        
+        canvas = document.getAnonymousElementByAttribute
+                            (this,"anonid","borderCanvas");
+        canvas.setAttribute("width",size);
+        canvas.setAttribute("height",size);
+      ]]>
+      </constructor>
+      <field name="_size">140</field>
+      <field name="_artist">null</field>
+      <field name="albums">[]</field>
+      <field name="type">"artist"</field>
+      <field name="_view">null</field>
+      <property name="artist">
+        <getter>
+          if (this._artist==null){
+            this._artist = this.getAttribute("artist");
+          }
+          return this._artist;
+        </getter>
+        <setter>
+          this.setAttribute("artist",val);
+          this._artist = val;
+          return this._artist;
+        </setter>
+      </property>
+      <property name="view">
+        <getter><![CDATA[
+          if (!this._view){
+            var ele = this.parentNode;
+            while(ele && ele.tagName!="view"){
+              ele=ele.parentNode;
+            }
+            this._view = ele;
+          }
+          return this._view;
+        ]]>
+        </getter>
+      </property>
+      <method name="init">
+        <parameter name="aArtist"/>
+        <body>
+        <![CDATA[
+        this.artist = aArtist;
+        var label = document.getAnonymousElementByAttribute
+                            (this,"anonid","artistName");
+        label.setAttribute("value",this.artist);
+        ]]>
+        </body>
+      </method>
+      <method name="addAlbum">
+        <parameter name="aAlbum"/>
+        <body>
+        <![CDATA[
+          this.albums.push(aAlbum);
+          if (this.albums.length>=6)
+            return;//don't redraw
+          try{
+          var canvas = document.getAnonymousElementByAttribute
+                            (this,"anonid","albumPile");
+          var bcanvas = document.getAnonymousElementByAttribute
+                            (this,"anonid","borderCanvas");
+          var defaultImage = "chrome://songbird/skin/album-art/default-cover.png";
+          var ctx = canvas.getContext("2d");
+          var bctx = bcanvas.getContext("2d");
+          bctx.strokeStyle = "rgb(0, 0, 0)";
+          bctx.lineWidth = 4;
+          
+          var size = 100;
+          var x=(this._size-size)/2;
+          var y=x;
+          function draw(degree,image){
+            ctx.save();
+            bctx.save();
+            var angle=degree*Math.PI/180;
+            //length from left to pivot point
+            var leftwidth = size*Math.sin(angle);
+            //width of rotated square
+            var rwidth = size*Math.sin(angle)+size*Math.cos(angle);
+            //diff between rotated square and normal square
+            var diff = (rwidth-size)/2;
+            //offset from left of normal square to left of rotated
+            var hoffset=Math.floor(leftwidth-diff);
+            //offset from top of normal square to top of rotated (rotatedheight-height/2)
+            var voffset=-Math.floor((size*Math.sin(angle)+size*Math.cos(angle)-size)/2);
+            ctx.translate(x+hoffset, y+voffset);
+            ctx.rotate(angle);
+            bctx.translate(x+hoffset, y+voffset);
+            bctx.rotate(angle);
+            
+            ctx.drawImage(image,0,0,size,size);
+            
+            if (degree==0 || image.src!=defaultImage)
+              bctx.strokeRect(0,0,size,size);
+            
+            bctx.restore();
+            try{
+              ctx.drawImage(image,0,0,size,size);
+            }catch(e){
+              //catch this incase the image is not loaded  or is just bad
+              //we need to make sure we restore this if there is a problem
+              //or else the rest of the albums will be drawn over the edge
+            }
+            ctx.restore();
+          }
+          //for (var i=this.albums.length-1;i>=0;i--){
+          var albums = this.albums;
+          function drawAlbum(i){
+            let (img = new Image()){
+              img.onload = function(){
+                draw(0-i*10,img);
+                if (i>0)
+                  drawAlbum(i-1);
+              }
+              img.src = albums[i].image;
+            }
+          }
+          drawAlbum(this.albums.length-1);
+          //this.drawBorder();
+          //}
+          }catch(e){
+            dump(e+"\n");
+          }
+        ]]>
+        </body>
+      </method>
+      <method name="drawBorder">
+        <body><![CDATA[
+          var canvas = document.getAnonymousElementByAttribute
+                            (this,"anonid","borderCanvas");
+          var ctx = canvas.getContext("2d");
+          var size = 102;
+          var x=(this._size-size)/2;
+          var y=x;
+          function draw(degree){
+            ctx.save();
+            var angle=degree*Math.PI/180;
+            //length from left to pivot point
+            var leftwidth = size*Math.sin(angle);
+            //width of rotated square
+            var rwidth = size*Math.sin(angle)+size*Math.cos(angle);
+            //diff between rotated square and normal square
+            var diff = (rwidth-size)/2;
+            //offset from left of normal square to left of rotated
+            var hoffset=Math.floor(leftwidth-diff);
+            //offset from top of normal square to top of rotated (rotatedheight-height/2)
+            var voffset=-Math.floor((size*Math.sin(angle)+size*Math.cos(angle)-size)/2);
+            ctx.translate(x+hoffset, y+voffset);
+            ctx.rotate(angle);
+            
+            ctx.lineWidth = 3;
+            
+            ctx.strokeRect(0,0,size,size);
+            ctx.restore();
+          }
+          //for (var i=this.albums.length-1;i>=0;i--){
+          var albums = this.albums;
+          ctx.strokeStyle = "rgb(0, 0, 200)";
+          function drawAlbum(i){
+            draw(0-i*10);
+            if (i>0)
+              drawAlbum(i-1);
+          }
+          drawAlbum(this.albums.length-1);
+        ]]></body>
+      </method>
+      <method name="playArtist">
+        <parameter name="aEvent" />
+        <body><![CDATA[
+          this.view.playArtist(this);
+          aEvent.preventDefault();
+          aEvent.stopPropagation();
+        ]]></body>
+      </method>
+      <!--
+      Returns the key state.
+      0 = regular
+      1 = command(mac) or control(windows/linux) - aka individual multiselect
+      2 = shift - directional select
+      -->
+      <method name="getSelectKeyState">
+        <parameter name="aEvent" />
+        <body><![CDATA[
+          var validMetaKeys = false;
+          var keyState = 0;
+          
+          if (aEvent.shiftKey)
+            keyState = 2;
+            
+          if (getPlatformString() == "Darwin") {
+            // Mac (Uses cmd)
+            if (aEvent.metaKey){
+              keyState = 1;
+            }
+          } else {
+           // Windows, Linux (Use ctrl)
+            if (aEvent.ctrlKey)
+              keyState = 1;
+          }
+          return keyState;          
+        ]]></body>
+      </method>
+      <method name="expandArtist">
+        <body>
+        <![CDATA[
+        var xulns = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
+        var other = this;
+        for each (album in this.albums){
+          var albEle = document.createElementNS(xulns,"album");
+          albEle.setAttribute("cover",album.image);
+          albEle.setAttribute("height",this.boxObject.height);
+          dump("album: "+album+"\n");
+          dump("album: "+album.name+" image: "+album.image+"\n");
+          this.parentNode.insertBefore(albEle,other);
+          albEle.init(album);
+          other = albEle
+        }
+        this.parentNode.removeChild(this);
+        ]]>
+        </body>
+      </method>
+    </implementation>
+    <handlers>
+      <handler event="click"
+               button="0"
+               clickcount="1"><![CDATA[
+          this.view.toggleSelect(this,this.getSelectKeyState(event));
+      ]]></handler>
+      <handler event="dblclick"><![CDATA[
+        this.playArtist(event);
+      ]]></handler>
+      <handler event="mouseover">
+        this.setAttribute("hover","true");
+      </handler>
+      <handler event="mouseout">
+        this.removeAttribute("hover");
+      </handler>
+    </handlers>
+  </binding>
+  
+  <binding id="album">
+    <content context="gridview-view-context">
+      <xul:vbox align="center">
+        <xul:label crop="end" value="" anonid="albumName"/>
+        <xul:spacer height="25"/>
+        <xul:hbox align="center">
+          <xul:hbox align="center">
+            <xul:image anonid="album_image"/>
+          </xul:hbox>
+        </xul:hbox>
+      </xul:vbox>
+    </content>
+    <implementation>
+      <constructor><![CDATA[
+        var img = document.getAnonymousElementByAttribute
+                            (this,"anonid","album_image");
+        var url = this.getAttribute("cover");
+        var width = 100, height=150;
+        img.setAttribute("width",width);
+        img.setAttribute("height",width);
+        img.parentNode.setAttribute("width",width);
+        img.parentNode.setAttribute("height",width);
+        this.setAttribute("width",width);
+        //this.setAttribute("height",height);
+        this.setAttribute("maxwidth",width);
+        //this.setAttribute("maxheight",height);
+        img.setAttribute("src",url);
+     ]]>
+      </constructor>
+      <field name="_artist">null</field>
+      <field name="_name">null</field>
+      <field name="mediaitem">null</field>
+      <field name="type">"album"</field>
+      <property name="artist">
+        <getter>
+          if (this._artist==null){
+            this._artist = this.getAttribute("artist");
+          }
+          return this._artist;
+        </getter>
+        <setter>
+          this.setAttribute("artist",val);
+          this._artist = val;
+          return this._artist;
+        </setter>
+      </property>
+      <property name="name">
+        <getter>
+          if (this._name==null){
+            this._name = this.getAttribute("name");
+          }
+          return this._name;
+        </getter>
+        <setter>
+          this.setAttribute("name",val);
+          this._name = val;
+          return this._name;
+        </setter>
+      </property>
+      <method name="init">
+        <parameter name="aAlbum"/>
+        <body>
+        <![CDATA[
+        if (aAlbum!=null){
+          this.name=aAlbum.name;
+          document.getAnonymousElementByAttribute
+                            (this,"anonid","albumName").value=this.name;
+          this.artist=aAlbum.artist;
+          this.mediaitem=aAlbum.mediaitem;
+        }
+        ]]>
+        </body>
+      </method>
+    </implementation>
+    <handlers>
+      <handler event="mouseover">
+        this.setAttribute("hover","true");
+      </handler>
+      <handler event="mouseout">
+        this.removeAttribute("hover");
+      </handler>
+    </handlers>
+  </binding>
+</bindings>

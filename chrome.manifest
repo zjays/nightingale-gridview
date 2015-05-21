@@ -1,0 +1,6 @@
+content gridview  chrome/content/
+locale  gridview  en-US  chrome/locale/en-US/
+skin    gridview  classic/1.0 chrome/skin/
+
+# Overlay preferences pane
+overlay chrome://browser/content/preferences/preferences.xul chrome://gridview/content/overlayPrefs.xul

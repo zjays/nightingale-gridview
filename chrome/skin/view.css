@@ -1,0 +1,92 @@
+view{
+  background-color: rgb(50,50,50);
+}
+artist, album{
+  /*-moz-border-radius: 15px 15px 15px 15px;*/
+}
+album[hover], artist[hover]{
+  background-color: rgb(75,75,75);
+}
+album[selected], artist[selected]{
+  background-color: rgb(100,100,100);
+}
+.borderCanvas{
+  display: none;
+}
+artist[selected] .borderCanvas{
+  display: block;
+}
+.albumArt {
+  /*-moz-border-radius: 5px;*/
+  border: 2px outset #000000;
+  max-width: 100px;
+  max-height: 100px;
+  min-height: 100px;
+  min-width: 100px;
+}
+albumblock[selected="true"] .albumBox > stack > .albumSelect {
+  /*border: 3px solid blue;*/
+  -moz-border-radius: 5px;
+}
+.spinnerBox {
+  -moz-box-pack: end;
+  -moz-box-align: end;
+  padding: 4px;
+}
+.spinnerBackground {
+  border: 1px solid #111111;
+  -moz-border-radius: 5px;
+  background-color: #F7F7F7;
+}
+.spinnerImage {
+  width: 16px;
+  height: 16px;
+}
+
+.playingBox {
+  -moz-box-pack: start;
+  -moz-box-align: end;
+  padding: 4px;
+}
+.playingImage{
+  width: 16px;
+  height: 16px;
+}
+
+.playButtonBox {
+  -moz-box-pack: end;
+  -moz-box-align: center;
+}
+.playButton {
+  border: 1px solid #878787;
+  -moz-opacity: 0.80;
+  -moz-border-radius: 25px;
+  background-color: #DCDCDC;
+  padding-left: 5px;
+  padding-right: 5px;
+  -moz-box-pack: center;
+  -moz-box-align: center;
+}
+.playButtonLabel {
+  font-size: 8px !important;
+}
+.playButtonImage{
+  width: 12px;
+  height: 12px;
+}
+
+/**
+ * The Songbird styles apply after these so they override some of the style settings :(
+ */
+.artistName {
+  margin: 0px !important;
+  font-weight: bold !important;
+  font-size: 10px !important;
+  text-align: center;
+  color: white !important;
+  padding: 0 4px 0 4px;
+}
+.moreInfo {
+  margin: 0px !important;
+  font-size: 9px !important;
+}

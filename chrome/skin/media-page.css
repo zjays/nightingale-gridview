@@ -1,0 +1,9 @@
+view{
+  -moz-binding: url('chrome://gridview/content/view.xml#gridviewbody');
+}
+album{
+  -moz-binding: url('chrome://gridview/content/view.xml#album');
+}
+artist{
+  -moz-binding: url('chrome://gridview/content/view.xml#artist');
+}

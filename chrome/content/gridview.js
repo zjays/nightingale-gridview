@@ -8,14 +8,7 @@ window.mediaPage.initViewElement = function MF_initiateElement(){
   
   //this._artistFilter = this._mediaListView.cascadeFilterSet.appendFilter(SBProperties.artistName);
   this._artistFilter = null;
-  
-  var array = Cc["@songbirdnest.com/Songbird/Properties/MutablePropertyArray;1"]
-                .createInstance(Ci.sbIMutablePropertyArray);
-  array.strict = false;
-  array.appendProperty(SBProperties.artistName, "a");
-  array.appendProperty(SBProperties.albumName, "a");
-  this.mediaListView.setSort(array);
-  
+    
   var filters = window.mediaPage.mediaListView.cascadeFilterSet;
   var len = filters.length;
   for (var i=0;i<len;i++){
@@ -34,7 +27,23 @@ window.mediaPage.initViewElement = function MF_initiateElement(){
     this._artistFilter = filters.appendFilter(SBProperties.artistName);
   }
   
+  this.sort(); 
+  this.view.mediaListView = this.mediaListView.clone();
+  //this.view.mediaListView.addListener(this.view.listener);
+  
   this.initiated = true;
+}
+window.mediaPage.sort = function MF_sort(){
+  var current = this.mediaListView.currentSort;
+  if (current.length>=2 && current.getPropertyAt(0).id==SBProperties.artistName &&
+      current.getPropertyAt(1).id==SBProperties.albumName)
+    return;
+  var array = Cc["@songbirdnest.com/Songbird/Properties/MutablePropertyArray;1"]
+                .createInstance(Ci.sbIMutablePropertyArray);
+  array.strict = false;
+  array.appendProperty(SBProperties.artistName, "a");
+  array.appendProperty(SBProperties.albumName, "a");
+  this.mediaListView.setSort(array);
 }
 //We don't display any filters in the artist view
 window.mediaPage._initPlaylist = function(){
@@ -176,13 +185,13 @@ window.mediaPage.updateAlbumImage = function MF_updateAlbumImage(aMediaItem){
  * This is called when the filter, search, or sort changes. 
  */
 window.mediaPage._updateView = function MF_updateView(aChangedView){
-  return;
   if (this.albums){
     this.albums.close();
     this.albums = null;
   }
-  //this._flow.clearItems();
-  this._getAlbums();
+  
+  //this.view.clear();
+  //this._getAlbums();
 }
 window.mediaPage.getContextTarget = function (){return document.getElementById("birdview");}
 window.mediaPage.getClickInfo = function MF_getClickInfo(aEvent){

@@ -8,13 +8,18 @@ album[hover],
 artist[hover] {
   background-color: rgb(75,75,75);
 }
-album[selected], artist[selected]{
+view album[selected="true"],
+view artist[selected="true"]{
   background-color: rgb(100,100,100);
+}
+view[hideHover] album[hover][selected="false"],
+view[hideHover] artist[hover][selected="false"]{
+  background-color: inherit;
 }
 .borderCanvas{
   display: none;
 }
-artist[selected] .borderCanvas{
+artist[selected="true"] .borderCanvas{
   display: block;
 }
 .spinnerBox {
@@ -73,7 +78,23 @@ artist[selected] .borderCanvas{
   color: white !important;
   padding: 0 4px 0 4px;
 }
+
 .moreInfo {
   margin: 0px !important;
   font-size: 9px !important;
+}
+
+.alphabetbox {
+  text-align: center;
+}
+.letter {
+  color: white !important;
+  margin: 0;
+  padding: 3px;
+}
+.viewPosIndicator{
+  background-color: black;
+}
+alphabet{
+  
 }

@@ -56,6 +56,8 @@ window.mediaPage = {
   _ignoreSelect : false,
   _toSelect : null,
   defaultCover: "chrome://songbird/skin/album-art/default-cover.png",
+  state: "",
+  search: "",
   //
   /**
    * Gets the sbIMediaListView that this page is displaying
@@ -129,7 +131,6 @@ window.mediaPage = {
     this._mediaList = this._mediaListView.mediaList;
     //Listen for items added, removed, and modified in this list
     this._mediaList.addListener(this);
-
     var view = this._mediaListView;
     Album.prototype.ignoreAlbumArtist = Application.prefs.getValue("extensions."+this.shortname+".ignoreAlbumArtist", false)
     var selectedItem = view.selection.currentMediaItem;
@@ -146,7 +147,8 @@ window.mediaPage = {
     //We need to wait a bit, don't flip songbird out. The sort can take some time.
     let (self = this){
       setTimeout(function(){
-        self.initViewElement();
+        self.initViewElement();    
+        self.mediaListView.addListener(self);
         self._initPlaylist();
         self._getAlbums();
       },0);
@@ -160,7 +162,8 @@ window.mediaPage = {
     this.initiated = false;
     if (this._mediaList)
       this._mediaList.removeListener(this);
-    
+    if (this.mediaListView)
+      this.mediaListView.removeListener(this);
     this.unloadViewElement();
     
     if (this._playlist) {
@@ -266,19 +269,19 @@ window.mediaPage = {
     var firstItem = null;
     var playingIndex = -1;
     try{
-      playingIndex = gMM.sequencer.viewPosition;
+      if (playView == gMM.sequencer.view)
+        playingIndex = gMM.sequencer.viewPosition;
     }catch(e){}
     var playIndex = -1;
-    while (playIndex==-1 && itr.hasMoreElements()){
+    while (itr.hasMoreElements()){
       var item = itr.getNext();
       var i = this.mediaListView.getIndexForItem(item);
       if (i<firstIndex){
         firstIndex = i;
         firstItem = item;
       }
-      if (i > playingIndex){
+      if (i > playingIndex && (i<playIndex || playIndex==-1)){
         playIndex = i;
-        break;
       }
     }
     if (playIndex==-1)
@@ -371,16 +374,22 @@ window.mediaPage = {
   /*
     loads the albums in the medialist
   */
-  _getAlbums: function MF_getAlbums(){
-    var view = this.mediaListView.clone();
+  _getAlbums: function MF_getAlbums(aState){
+    aState=aState?aState:this;
+    //dump("getAlbums: "+aState.state+"\n");
     var len = this._mediaList.length;
-    
+    var view = this.view.mediaListView;
+    aState.state = "loading";
     let (mf = this){
       this._toSelect = this._currentAlbum;
       function loadAlbums(){
         var count=0, limit=5, changeLength = 30, changeLimit=3;
         for (var i = 0;i<len;i++){
           try{
+            if (!mf.initiated){
+              aState.state = "clear";
+              yield -1;
+            }
             var item = view.getItemByIndex(i);
             if (mf._addAlbum(item, i)){
               count++;
@@ -392,9 +401,10 @@ window.mediaPage = {
               }
             }
           }catch(e){
-            dump(i+") "+e+"\n");
+            //dump(i+") "+e+"\n");
           }
         }
+        aState.state = "loaded";
         yield -1;
       }
       mf.albums = loadAlbums();
@@ -417,50 +427,6 @@ window.mediaPage = {
       }
       increment();    
     }
-    /*
-    let (mf = this){
-      this._toSelect = this._currentAlbum;
-      function loadAlbums(){
-        var count=0, limit=5, changeLength = 30, changeLimit=3;
-        for (var i = 0;i<len;i++){
-          try{
-            var item = view.getItemByIndex(i);
-            if (mf._addAlbum(item, i)){
-              count++;
-              if (count>=limit){
-                count=0;
-                if (limit!=changeLimit && i>changeLength)
-                  limit = changeLimit;
-                yield true;
-              }
-            }
-          }catch(e){
-            dump(i+") "+e+"\n");
-          }
-        }
-        yield -1;
-      }
-      mf.albums = loadAlbums();
-      function increment(){
-        if (mf.initiated && mf.albums){
-          if (mf.albums.next()!=-1){
-            setTimeout(function(){
-              increment();
-            },0)
-          } else {
-            mf.albums.close();
-            mf.albums = null;
-          }
-        } else {
-          if (mf.albums){
-            mf.albums.close();
-          }
-          mf.albums = null;
-        }
-      }
-      increment();    
-    }
-    */
   },
   
   _processAlbumChanged : function MF_processAlbumChanged(aAlbum){
@@ -583,9 +549,51 @@ window.mediaPage = {
   },
 
   toString: function(){
-    return "MediaFlow media page\n";
+    return "media page\n";
   },
 
+  /* sbIMediaListViewListener */
+  onFilterChanged: function MFVL_onFilterChanged(aView){
+  },
+  onSearchChanged: function MFVL_onSearchChanged(aView){
+    if (aView!=window.mediaPage.mediaListView)
+      return;
+    try{
+    //dump("onsearchchangd1\n");
+    var terms = [];
+    var search = aView.searchConstraint;
+    if (search){
+      var groupCount = search.groupCount;
+      for (var i = 0; i < groupCount; i++) {
+        var group = search.getGroup(i);
+        var property = group.properties.getNext();
+        terms.push(group.getValues(property).getNext());
+      }
+    } else {
+      
+    }
+    window.mediaPage.search = terms.join(" ");
+    var filters = window.mediaPage.view.mediaListView.cascadeFilterSet;
+    var len = filters.length;
+    for (var j=0;j<len;j++){
+      if (filters.isSearch(j)){
+        try{
+          filters.set(j,terms,terms.length);
+        }catch(e){
+          
+        }
+        //Only one search in a filterset
+        break;
+      }
+    }
+    }catch(e){
+      Components.utils.reportError(e);
+    }
+  },
+  onSortChanged: function MFVL_onSortChanged(aChangedView){
+    
+  },
+  
   QueryInterface: function MF_QueryInterface(iid) {
     if (!iid.equals(Ci.sbILocalDatabaseAsyncGUIDArrayListener) &&
         !iid.equals(Ci.sbIAlbumArtListener) &&
@@ -629,7 +637,6 @@ window.mediaPage.context = {
   onShowing: function MFC_onShowing(aEvent){
     var info = this.parent.getClickInfo(aEvent);
     this.parent.view.select(document.popupNode);
-    dump("info: "+info+"\n");
     if (info){
       this.item = info.item;
       this.mediaitem = info.mediaitem;

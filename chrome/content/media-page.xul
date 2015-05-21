@@ -61,7 +61,6 @@
                 oncommand="window.mediaPage.context.removeItem(event);"/>
       <menuitem id="library_cmd_edit" label="Edit Metadata" class="menuitem-iconic"
                 oncommand="window.mediaPage.context.editItem(event);"/>
-      <menuseparator id="gridview-aam-options"/>
     </menupopup>
   </popupset>
   <view id="birdview"/>

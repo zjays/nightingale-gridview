@@ -1,3 +1,5 @@
+<!ENTITY gridview.alphabet "1ABCDEFGHIJKLMNOPQRSTUVWXYZ">
+
 <!ENTITY albumart.getartwork "Get Artwork">
 <!ENTITY albumart.clearartwork "Clear Artwork">
 <!ENTITY settings.label "Settings">

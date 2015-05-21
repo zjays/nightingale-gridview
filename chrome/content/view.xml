@@ -1,6 +1,8 @@
 <?xml version="1.0"?>
-<!DOCTYPE bindings PUBLIC "-//MOZILLA//DTD XBL V1.0//EN" "http://www.mozilla.org/xbl">
-
+<!DOCTYPE bindings [
+  <!ENTITY % gridviewDTD SYSTEM "chrome://gridview/locale/gridview.dtd" >
+  %gridviewDTD;
+]>
 <bindings
     xmlns="http://www.mozilla.org/xbl"
     xmlns:xbl="http://www.mozilla.org/xbl"
@@ -12,21 +14,75 @@
     <resources>
       <stylesheet src="chrome://gridview/skin/view.css"/>
     </resources>
-    <content flex="1">
-      <xul:vbox anonid="innerContent" style="display: block; overflow: auto; -moz-box-flex: 1;">
-        
-      </xul:vbox>
+    <content flex="1" orient="vertical">
+      <xul:hbox>
+        <xul:spacer flex="1"/>
+        <xul:alphabet anonid="alphabet"/>
+        <xul:spacer flex="1"/>
+      </xul:hbox>
+      <xul:scrollbox style="overflow: auto; -moz-box-flex: 1">
+        <xul:vbox anonid="innerContent" orient="vertical" style="display: block; -moz-box-flex: 1;">
+          
+        </xul:vbox>
+      </xul:scrollbox>
     </content>
     <implementation>
+      <field name="alphabet">null</field>
+      <field name="artists">null</field>
+      <field name="_artistFilter">-1</field>
       <constructor><![CDATA[
-        let (t = this) {
-          setTimeout(function(){
-            //leave room for the sidebar
-            t.innerContent.setAttribute("width",t.parentNode.boxObject.width);
-          });
-        }
+        //setup alphabet
+        dump("view load\n");
+        this.alphabet = document.getAnonymousElementByAttribute
+                            (this,"anonid","alphabet");
+        this.alphabet.bind(this.innerContent);
+        
      ]]>
       </constructor>
+      <destructor>
+        if (this.mediaListView){
+          try{
+            this.mediaListView.removeListener(this.listener);
+          }catch(e){}
+        }
+        if (this.artists){
+          this.artists.close();
+          this.artists = null;
+        }
+      </destructor>
+      <field name="_mediaListView">null</field>
+      <property name="mediaListView">
+        <getter>
+          return this._mediaListView;
+        </getter>
+        <setter><![CDATA[
+          if (this._mediaListView){
+            try{
+              this._mediaListView.removeListener(this);
+            }catch(e){}
+          } 
+          this._mediaListView = val;
+          this._mediaListView.addListener(this.listener);
+          var filters = window.mediaPage.mediaListView.cascadeFilterSet;
+          var len = filters.length;
+          for (var i=0;i<len;i++){
+            if (filters.getProperty(i) == SBProperties.artistName){
+              this._artistFilter = i;
+              var blank = [];
+              try{
+                filters.set(i,blank,0);
+              }catch(e){
+                
+              }
+              break;
+            }
+          }
+          if (this._artistFilter==null){
+            this._artistFilter = filters.appendFilter(SBProperties.artistName);
+          }
+          return val;]]>
+        </setter>
+      </property>
       <field name="selection">[]</field>
       <field name="_innerContent">null</field>
       <property name="innerContent">
@@ -44,10 +100,13 @@
           if (last && last.type=="artist" && last.artist==aAlbum.artist){
             last.addAlbum(aAlbum);
           } else {
-            var ele = document.createElement("artist");
+            var xulns = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
+            var ele = document.createElementNS(xulns,"artist");
             this.innerContent.appendChild(ele);
             ele.init(aAlbum.artist);
             ele.addAlbum(aAlbum);
+            
+            this.alphabet.checkEle(ele);
           }
         ]]></body>
       </method>
@@ -72,22 +131,20 @@
         <body><![CDATA[
           var artists = [];
           var filters = window.mediaPage.mediaListView.cascadeFilterSet;
-          if (!aEle.hasAttribute("selected")){
+          if (aEle.getAttribute("selected")!="true"){
             aEle.setAttribute("selected","true");
             this.selection.push(aEle);
           }
           for (var i=this.selection.length-1;i>=0;i--){
             var ele=this.selection[i];
             if (ele!=aEle){
-              ele.removeAttribute("selected");
+              ele.setAttribute("selected","false");
               this.selection.splice(i,1);
             }
           }
           //add the current artist to the list
           artists.push(aEle.artist);
-          dump("artist: "+aEle.artist+"\n");
-          dump(artists+"\n");
-          filters.set(window.mediaPage._artistFilter,artists,artists.length);
+          filters.set(this._artistFilter,artists,artists.length);
         ]]>
         </body>
       </method>
@@ -96,7 +153,7 @@
         <body><![CDATA[
           var artists = [];
           var filters = window.mediaPage.mediaListView.cascadeFilterSet;
-          var values = filters.get(window.mediaPage._artistFilter);
+          var values = filters.get(this._artistFilter);
           var itr = values.enumerate();
           while(itr.hasMoreElements()){
             var val = itr.getNext();
@@ -105,8 +162,8 @@
             if (val!=aEle.artist)
               artists.push(val);
           }
-          if (aEle.hasAttribute("selected")){
-            aEle.removeAttribute("selected");
+          if (aEle.getAttribute("selected")=="true"){
+            aEle.setAttribute("selected","false");
             var idx=this.selection.indexOf(aEle);
             if (idx>-1){
               this.selection.splice(idx,1);
@@ -116,7 +173,7 @@
             this.selection.push(aEle);
             artists.push(aEle.artist);
           }
-          filters.set(window.mediaPage._artistFilter,artists,artists.length);
+          filters.set(this._artistFilter,artists,artists.length);
         ]]>
         </body>
       </method>
@@ -135,7 +192,7 @@
             //remove the rest from the selection
             for (var i=this.selection.length-2;i>=0;i--){
               var ele = this.selection[i];
-              ele.removeAttribute("selected");
+              ele.setAttribute("selected","false");
               this.selection.splice(i,1);
             }
             var prop = "nextSibling"
@@ -152,7 +209,7 @@
               //the start of it will always be at the end of the array
               this.selection.unshift(ele);
             }   
-            filters.set(window.mediaPage._artistFilter,artists,artists.length);
+            filters.set(this._artistFilter,artists,artists.length);
           }
         ]]>
         </body>
@@ -193,7 +250,7 @@
       <method name="playArtist">
         <parameter name="aEle" />
         <body><![CDATA[
-          if (!aEle.hasAttribute("selected")){
+          if (aEle.getAttribute("selected")!="true"){
             this.select(aEle);
           }
           
@@ -201,11 +258,554 @@
           window.mediaPage.play(current);
         ]]></body>
       </method>
+      <method name="clear">
+        <body><![CDATA[
+          while(this.innerContent.lastChild)
+            this.innerContent.removeChild(this.innerContent.lastChild);
+        ]]></body>
+      </method>
+      <method name="onSearchChanged">
+        <body><![CDATA[
+        dump("ONSearchCHANGED\n");
+          var len = this.mediaListView.mediaList.length;
+          var view = this.mediaListView;
+          
+          function ArtistGenerator(){
+            var lastArtist = null;
+            try{
+            for (var i = 0;i<len;i++){
+              try{
+                var item = view.getItemByIndex(i);
+                var artist = item.getProperty(SBProperties.artistName);
+                if (artist!=lastArtist){
+                  yield artist;
+                }
+                lastArtist = artist;
+              }catch(e){}
+            }
+            yield null;
+            }catch(e){
+              //dump("e: "+e+"\n");
+            }
+          }
+          let (self = this){
+            function FixArtist(aArtist){
+              var pI = Cc["@songbirdnest.com/Songbird/Properties/Info/Text;1"]
+         		    .createInstance(Ci.sbITextPropertyInfo);
+              return pI.makeSortable(aArtist);
+            }
+            self.artists = ArtistGenerator();
+            var node = this.innerContent.firstChild;
+            var count = 0, limit = 10;
+            function increment(){
+              if (self.artists){
+                var artist;
+                try{
+                  artist = self.artists.next();
+                }catch(e){
+                  //dump("ee: "+e+"\n");
+                }
+                //dump("artist: "+artist+" node: "+node+"\n");
+                if (artist && node){
+                  artist = FixArtist(artist);
+                  while(node && FixArtist(node.artist)<artist){
+                    node.collapsed = true;
+                    node=node.nextSibling;
+                  }
+                  if (node){
+                    node.collapsed = false;
+                    node = node.nextSibling;
+                  }
+                  count++;
+                  if (count==limit){
+                    increment();
+                  } else
+                    setTimeout(increment,0,self);
+                } else if (node) {
+                  while(node){
+                    node.collapsed = true;
+                    node=node.nextSibling;
+                  }
+                  increment();
+                } else {
+                  //finished, lets fix up the alphabet
+                  self.alphabet.viewScrolled(1)
+                }
+              }
+            }
+            increment();    
+          }
+        ]]></body>
+      </method>
+      <method name="onFilterChanged">
+        <body><![CDATA[
+          //dump("view filter changed\n");
+        ]]></body>
+      </method>
+      <method name="onSortChanged">
+        <body><![CDATA[
+          //dump("view sort changed\n");
+        ]]></body>
+      </method>
+      <field name="listener"><![CDATA[
+        var self = this;
+        var alist = {
+          onFilterChanged: function MFVL_onFilterChanged(aView){
+            
+          },
+          onSearchChanged: function MFVL_onSearchChanged(aView){
+            //dump("view on search changed, state: "+window.mediaPage.state+"\n");
+            if (window.mediaPage.state != "loaded"){
+              if (window.mediaPage.albums){
+                window.mediaPage.albums.close();
+                window.mediaPage.albums = null;
+              }
+              self.clear();
+              var astate;
+              if (window.mediaPage.search=="")
+                astate = window.mediaPage;
+              else
+                astate = {state:""};
+              //dump("astate: "+astate+"\n");
+              window.mediaPage._getAlbums(astate);
+            } else
+              self.onSearchChanged(aView)
+          },
+          onSortChanged: function MFVL_onSortChanged(aChangedView){
+            
+          },
+          QueryInterface: function MF_QueryInterface(iid) {
+            if (!iid.equals(Ci.sbIMediaListViewListener) &&
+                !iid.equals(Ci.nsISupportsWeakReference) &&
+                !iid.equals(Ci.nsISupports))
+              throw Cr.NS_ERROR_NO_INTERFACE;
+            return this;
+          }
+        }
+        listener = alist;
+        ]]>
+      </field>
     </implementation>
+    <handlers>
+      <handler event="DOMMouseScroll"><![CDATA[
+        this.alphabet.viewScrolled(event.detail);
+      ]]></handler>
+      <handler event="mousemove">
+        this.removeAttribute("hideHover");
+      </handler>
+      <handler event="keypress"><![CDATA[
+        var sel=null;
+        if (this.selection.length==0){
+          sel=this.alphabet.beginEle;
+        } else
+          sel=this.selection[this.selection.length-1];
+        if (event.keyCode == KeyEvent.DOM_VK_RETURN){
+          this.playArtist(sel);
+        }
+        if (event.keyCode>=37 && event.keyCode<=40){
+          if (this.selection.length==0){
+            this.select(sel);
+          }
+          else{
+            var dir = 0;
+            if (event.keyCode == KeyEvent.DOM_VK_LEFT){
+              var curX = sel.boxObject.x;
+              do {
+                sel = sel.previousSibling;
+                if (sel && !sel.collapsed){
+                  var nextX =  sel.boxObject.x;
+                  if (nextX>=curX)
+                    sel = null;
+                }
+              }while(sel && sel.collapsed);
+            } else if (event.keyCode == KeyEvent.DOM_VK_RIGHT){
+              var curX = sel.boxObject.x;
+              do{
+                sel = sel.nextSibling;
+                if (sel){
+                  var nextX =  sel.boxObject.x;
+                  if (nextX<=curX)
+                    sel = null;
+                }
+              }while(sel && sel.collapsed);
+            } else if (event.keyCode == KeyEvent.DOM_VK_UP){
+              var curX = sel.boxObject.x;
+              do{
+                sel = sel.previousSibling;
+              } while(sel && (sel.collapsed || sel.boxObject.x!=curX));
+              dir = -1;
+            } else if (event.keyCode == KeyEvent.DOM_VK_DOWN){
+              var curX = sel.boxObject.x;
+              do{
+                sel = sel.nextSibling;
+              } while(sel && (sel.collapsed || sel.boxObject.x!=curX));
+              dir = 1;
+            }
+            if (sel){
+              this.select(sel);
+              var scrllbox = this.innerContent.parentNode.boxObject.QueryInterface(
+                Components.interfaces.nsIScrollBoxObject);
+              var parrect = this.innerContent.parentNode.getClientRects().item(0);
+              var top = Math.abs(parrect.top);
+              var y = sel.boxObject.y - top;
+              var height = sel.boxObject.height;
+              var posy = {value: -1}, posx = {value: -1};
+              var viewheight = this.innerContent.parentNode.boxObject.height;
+              scrllbox.getPosition(posx,posy);
+              if (y<posy.value)
+                scrllbox.scrollTo(0,y);
+              else if (y+height>posy.value+viewheight){
+                scrllbox.scrollTo(0,y+height-viewheight);
+              }
+              this.setAttribute("hideHover","true");
+              if (dir!=0)
+                this.alphabet.viewScrolled(dir);
+            }
+          }
+        }
+        ]]>
+      </handler>
+    </handlers>
   </binding>
+  <binding id="alphabet">
+    <resources>
+      <stylesheet src="chrome://gridview/skin/view.css"/>
+    </resources>
+    <content>
+      <xul:hbox anonid="alphabetBox" class="alphabetbox"
+                alphabet="&gridview.alphabet;">
+        <xul:stack width="200" xbl:inherits="alphabet">
+          <xul:hbox xbl:inherits="alphabet">
+            <xul:hbox anonid="viewPosIndicator" xbl:inherits="alphabet" class="viewPosIndicator"/>
+          </xul:hbox>
+          <xul:hbox anonid="alphabetContainer" width="200"/>
+        </xul:stack>
+      </xul:hbox>
+    </content>
+    <implementation>
+      <field name="_beginEle">null</field>
+      <property name="beginEle">
+        <setter>
+          this._beginEle = val;
+        </setter>
+        <getter><![CDATA[
+          if (!this._beginEle && this.view){
+            this._beginEle = this.view.firstChild;
+          }
+          return this._beginEle
+          ]]>
+        </getter>
+      </property>
+      <field name="_endEle">null</field>
+      <property name="endEle">
+        <setter>
+          this._endEle = val;
+        </setter>
+        <getter><![CDATA[
+          if (!this._endEle){
+            this._endEle = this.beginEle;
+          }
+          return this._endEle
+          ]]>
+        </getter>
+      </property>
+      <field name="view">null</field>
+      <field name="_viewPosIndicator">null</field>
+      <property name="viewPosIndicator">
+        <getter>
+          if (!this._viewPosIndicator)
+            this._viewPosIndicator = document.getAnonymousElementByAttribute
+                            (this,"anonid","viewPosIndicator");
+          return this._viewPosIndicator;
+        </getter>
+      </property>
+      <constructor><![CDATA[
+        //setup alphabet
+        try{
+        var xulns = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
+        var alphabox = document.getAnonymousElementByAttribute
+                            (this,"anonid","alphabetBox");
+        var alphaCont = document.getAnonymousElementByAttribute
+                            (this,"anonid","alphabetContainer");
+        var alpha = alphabox.getAttribute("alphabet").split("");
+        this.alphabet = alpha;
+        var letter;
+        for (var i=0;i<alpha.length;i++){
+          letter = document.createElementNS(xulns,"label");
+          letter.setAttribute("value",alpha[i]);
+          letter.setAttribute("class","letter");
+          alphaCont.appendChild(letter);
+        }
+        
+        setTimeout(function(t){
+            t.viewPosIndicator.let=letter.boxObject.width+8;
+            t.resetViewPos();
+            t.view.setAttribute("width",t.view.parentNode.parentNode.boxObject.width);
+          },0,this);
+        //this.innerContent.parentNode.addEventListener("DOMMouseScroll",this.onscroll,true);
+        }catch(e){
+          dump("e: "+e+"\n");
+        }
+      ]]>
+      </constructor>
+      <method name="bind">
+        <parameter name="view"/>
+        <body>
+          this.view = view;
+        </body>
+      </method>
+      <method name="resetViewPos">
+        <body>
+          this.viewPosIndicator.width = this.viewPosIndicator.let;
+          this.viewPosIndicator.style.marginLeft = 0;
+          this.viewPosIndicator.setAttribute("beginletter","A");
+          this.viewPosIndicator.setAttribute("endletter","A");
+        </body>
+      </method>
+      <method name="viewScrolled">
+        <parameter name="direction"/>
+        <body>
+        <![CDATA[
+          try{
+          //1 = scrolled down
+          //-1 = scrolled up
+          var method = direction<0?"previousSibling":"nextSibling";
+          var parrect = this.view.parentNode.getClientRects().item(0)
+          var rect = this.view.getClientRects().item(0);
+          var top = Math.abs(parrect.top);
+          var scrolly = Math.abs(rect.top);//-top;
+          var viewheight = this.view.parentNode.boxObject.height;
+          var t = this;
+          var diff = 1000000, prevdiff=1000000;
+          var beginIndex = -1;
+          var height = this.beginEle.boxObject.height;
+          //dump("scrolly: "+scrolly+" top: "+top+"\n");
+          scrolly-=top;
+          function FixArtist(aArtist){
+            var pI = Cc["@songbirdnest.com/Songbird/Properties/Info/Text;1"]
+              .createInstance(Ci.sbITextPropertyInfo);
+            return pI.makeSortable(aArtist);
+          }
+          function checkBeginEle(aEle){
+            if (!aEle || aEle.collapsed)
+              return false;
+            var y = aEle.boxObject.y - top;
+            var x = aEle.boxObject.x;
+            diff = y+height-scrolly;
+            //dump("checkBeginEle: "+aEle.artist+" = "+(diff>=0)+"|"+(diff<=height*1.5)+"|"+(y-scrolly>=-height/3)+"\n");
+            if (diff>=0 && diff<=height*1.5 && y-scrolly>=-height/3){
+              //top row
+              //dump("top row: "+x+"\n");
+              if (x == 0){
+                //dump("begin ele found!\n");
+                //far left
+                var artist = FixArtist(aEle.artist);
+                var letter = artist.substring(0,1).toUpperCase();
+                t.beginEle = aEle;
+                var index = t.alphabet.indexOf(letter);
+                if (index==-1) index = 0;
+                beginIndex = index;
+                t.viewPosIndicator.setAttribute("beginletter",t.alphabet[index]);
+                t.viewPosIndicator.style.marginLeft = t.viewPosIndicator.let*index+"px";
+                var endIndex = t.alphabet.indexOf(t.viewPosIndicator.getAttribute("endletter"));
+                t.viewPosIndicator.width = t.viewPosIndicator.let*(endIndex - index+1);
+                return true;
+              }
+            }
+            return false;
+          }
+          
+          var ele = this.beginEle;
+          //dump("beginEle: "+ele.artist+"\n");
+          var newBeginning = false;
+          while (ele && (ele=ele[method]) && !(newBeginning=checkBeginEle(ele))){
+            //dump("diff: "+diff+" pre: "+prevdiff+"\n");
+            if ((Math.abs(diff)>Math.abs(prevdiff) && prevdiff>0)
+                || Math.abs(diff)-Math.abs(prevdiff)>this.beginEle.boxObject.height*2){
+              break;
+            }
+            prevdiff = diff;
+          }
+          diff = 1000000, prevdiff = 1000000;
+          var nmethod = method=="previousSibling"?"nextSibling":"previousSibling";
+          ele = this.beginEle;
+          while (!newBeginning && ele && (ele=ele[nmethod]) && !(newBeginning=checkBeginEle(ele))){
+            if (Math.abs(diff)>Math.abs(prevdiff)){
+              break;
+            }
+            prevdiff = diff;
+          }
+          var endX = -1,endY=-1;
+          
+          function checkEndEle(aEle){
+            
+            try{
+            var y = aEle.boxObject.y - top;
+            var x = aEle.boxObject.x;
+            diff = y+height-scrolly;
+            //dump("checkEndEle("+aEle.artist+"): x,y: "+endX+","+endY+"  -  "+x+","+y+" scroll: "+scrolly+" vh: "+viewheight+" height: "+height+"\n");
+            //if (y<scrolly+viewheight && y+height>=scrolly+viewheight && ((y==endY && x>=endX) || y!=endY)){
+            //dump((y<scrolly+viewheight)+"|"+(y+height>=scrolly)+"|"+(y>=endY)+"|"+((y==endY && x>=endX) || y!=endY)+"\n");
+            if (y<scrolly+viewheight && y+height>=scrolly && y>=endY && ((y==endY && x>=endX) || y!=endY)){
+              if (aEle.collapsed)
+                return null;
+              //dump("found ele! x,y: "+endX+","+endY+"  -  "+x+","+y+"\n");
+              var artist = FixArtist(aEle.artist);
+              var letter = artist.substring(0,1).toUpperCase();
+              t.endEle = aEle;
+              endX = x; endY = y;
+              var index = t.alphabet.indexOf(letter)+1;
+              if (index==0) index = 1;
+              t.viewPosIndicator.setAttribute("endletter",t.alphabet[index-1]);
+              if (beginIndex<0)
+                beginIndex = t.alphabet.indexOf(t.viewPosIndicator.getAttribute("beginletter"))
+              
+              index = index-beginIndex;;
+              t.viewPosIndicator.width = t.viewPosIndicator.let*index;
+              return true;
+            }
+            }catch(e){dump("checkendeleerr: "+e+"\n");}
+            return false;
+          }
+        
+          diff = 1000000, prevdiff = 1000000;
+          ele = this.endEle;
+          //dump("end Ele: "+ele.artist+"\n");
+          var found = false, prevfound = false;
+          if (!this.endEle.collapsed){
+            endX = this.endEle.boxObject.x;
+            endY = this.endEle.boxObject.y - top;
+            if (!(endY<scrolly+viewheight && endY+height>=scrolly)){
+              endY = -1;
+              endX = -1;
+            }
+          }
+          while (ele && (ele=ele[method]) && ((prevfound==true && found!=false)||!prevfound)){
+            prevfound = found;
+            found = checkEndEle(ele);
+            //dump("found1("+ele.artist+"): "+found+" prevfound: "+prevfound+"\n");
+          }
+          var nmethod = method=="previousSibling"?"nextSibling":"previousSibling";
+          ele = this.endEle;
+          while (ele && (ele=ele[nmethod]) && ((prevfound==true && found!=false)||!prevfound)){
+            prevfound = found;
+            found = checkEndEle(ele);
+            //dump("found2("+ele.artist+"): "+found+" prevfound: "+prevfound+"\n");
+          }
+          }catch(e){
+            //dump("e2: "+e+"\n");
+            Components.utils.reportError(e);
+          }
+        ]]>
+        </body>
+      </method>
+      <method name="checkEle">
+        <parameter name="ele"/>
+        <body>
+        <![CDATA[
+        try{
+            var parrect = this.view.parentNode.getClientRects().item(0)
+            var rect = this.view.getClientRects().item(0);
+            var top = Math.abs(parrect.top);
+            var scrolly = Math.abs(rect.top)-top;
+            var viewheight = this.view.parentNode.boxObject.height;
+            var t = this;
   
+            var y = ele.boxObject.y - top;
+            var x = ele.boxObject.x;
+            var height = ele.boxObject.height;
+            //dump("x: "+x+" y: "+y+" height: "+height+" scrolly: "+scrolly+" viewheight: "+viewheight+"\n");
+            function FixArtist(aArtist){
+              var pI = Cc["@songbirdnest.com/Songbird/Properties/Info/Text;1"]
+         		    .createInstance(Ci.sbITextPropertyInfo);
+              return pI.makeSortable(aArtist);
+            }
+            if (y+height-scrolly<=height){
+              //top row
+              if (x == 0){
+                //far left
+                var artist = FixArtist(ele.artist);
+                //dump("Artist at top left is: "+aAlbum.artist+"\n");
+                var letter = artist.substring(0,1).toUpperCase();
+                t.beginEle = ele;
+                var index = t.alphabet.indexOf(letter);
+                if (index==-1) index = 0;
+                t.viewPosIndicator.setAttribute("beginletter",t.alphabet[index]);
+                t.viewPosIndicator.style.marginLeft = t.viewPosIndicator.let*index+"px";
+              }
+            }
+            if (y<scrolly+viewheight && y+height>=scrolly+viewheight){
+              var artist = FixArtist(ele.artist);
+              var letter = artist.substring(0,1).toUpperCase();
+              if (letter>=this.viewPosIndicator.getAttribute("endletter")){
+                t.endEle = ele;
+                var index = t.alphabet.indexOf(letter)+1;
+                if (index==0) index = 1;
+                t.viewPosIndicator.setAttribute("endletter",t.alphabet[index-1]);
+                t.viewPosIndicator.width = t.viewPosIndicator.let*index;
+              }
+            }
+          }catch(e){
+            Components.utils.reportError(e);
+          }   
+        ]]>
+        </body>
+      </method>
+      <method name="scrollToLetter">
+        <parameter name="letter"/>
+        <body><![CDATA[;
+          var pI = Cc["@songbirdnest.com/Songbird/Properties/Info/Text;1"]
+            .createInstance(Ci.sbITextPropertyInfo);
+          var current = pI.makeSortable(this.beginEle.artist)
+              .substring(0,1).toUpperCase();
+          if (current == letter)
+            return;
+          var ele = this.view.firstChild;
+          do{
+            var eletter = pI.makeSortable(ele.artist)
+                .substring(0,1).toUpperCase();
+            if (eletter>=letter){
+              var scrollbox = this.view.parentNode.boxObject;
+              scrollbox = scrollbox.QueryInterface(Ci.nsIScrollBoxObject);
+              //scrollbox.scrollToElement(ele);
+              var parrect = this.view.parentNode.getClientRects().item(0);
+              var top = Math.abs(parrect.top);
+              var y = ele.boxObject.y - top;
+              scrollbox.scrollTo(0,y);
+              this.viewScrolled(1);
+              break;
+            }
+          } while((ele = ele.nextSibling));
+        ]]></body>
+      </method>
+      <field name="isMouseDown">false</field>
+    </implementation>
+    <handlers>
+      <handler event="mousedown">
+        this.isMouseDown = true;
+        if (event.originalTarget.className=="letter"){
+          this.scrollToLetter(event.originalTarget.value);
+        }
+      </handler>
+      <handler event="mousemove"><![CDATA[
+        if (this.isMouseDown && event.originalTarget.className=="letter"){
+          this.scrollToLetter(event.originalTarget.value);
+        }
+        ]]>
+      </handler>
+      <handler event="mouseup">
+        this.isMouseDown = false;
+      </handler>
+      <handler event="mouseout">
+        //dump("mouse event: ");
+        //dump(event.originalTarget.localName+"\n");
+        if (event.originalTarget.className=="alphabetbox")
+          this.isMouseDown = false;
+      </handler>
+    </handlers>
+  </binding>
   <binding id="artist">
-    <content context="gridview-view-context">
+    <content context="gridview-view-context" selected="false">
       <xul:hbox align="center">
         <xul:vbox>
           <xul:stack xbl:inherits="tooltiptext=albumName">
@@ -388,7 +988,7 @@
               //catch this incase the image is not loaded  or is just bad
               //we need to make sure we restore this if there is a problem
               //or else the rest of the albums will be drawn over the edge
-              dump("addAlbumErr: "+e+"\n");
+              //dump("addAlbumErr: "+e+"\n");
             }
             bctx.restore();
             ctx.restore();
@@ -462,8 +1062,6 @@
           var albEle = document.createElementNS(xulns,"album");
           albEle.setAttribute("cover",album.image);
           albEle.setAttribute("height",this.boxObject.height);
-          dump("album: "+album+"\n");
-          dump("album: "+album.name+" image: "+album.image+"\n");
           this.parentNode.insertBefore(albEle,other);
           albEle.init(album);
           other = albEle

@@ -1,9 +1,13 @@
 view{
   -moz-binding: url('chrome://gridview/content/view.xml#gridviewbody');
+  -moz-user-focus: normal;
 }
 album{
   -moz-binding: url('chrome://gridview/content/view.xml#album');
 }
 artist{
   -moz-binding: url('chrome://gridview/content/view.xml#artist');
+}
+alphabet{
+  -moz-binding: url('chrome://gridview/content/view.xml#alphabet');
 }

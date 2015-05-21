@@ -1058,12 +1058,15 @@
           var bctx = bcanvas.getContext("2d");
           bctx.strokeStyle = "rgb(0, 0, 0)";
           bctx.lineWidth = 4;
-          
+		  
           if (clear){
             ctx.clearRect(0,0,this._size,this._size);
             bctx.clearRect(0,0,this._size,this._size);
           }
-          var size = 100;//Smaller than the real size because we need to rotate the albums
+          var size = this._size/(2*Math.sin(45*Math.PI/180));//Smaller than the real size because we need to rotate the albums.
+		  //Album cover has biggest horizonal width when it is rotated 45 degrees (=2*sin45*size), 
+		  //so we make the cover smaller than the grid to account for exactly this.
+		  
           var x=(this._size-size)/2;
           var y=x;
           function draw(degree,image){

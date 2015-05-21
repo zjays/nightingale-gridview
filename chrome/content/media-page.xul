@@ -10,6 +10,8 @@
 <!DOCTYPE page [
   <!ENTITY % gridviewDTD SYSTEM "chrome://gridview/locale/gridview.dtd" >
   %gridviewDTD;
+  <!ENTITY % albumartmanagerDTD SYSTEM "chrome://albumartmanager/locale/albumartmanager.dtd" >
+  %albumartmanagerDTD;
   <!ENTITY % songbirdDTD SYSTEM "chrome://songbird/locale/songbird.dtd" >
   %songbirdDTD;
 ]>
@@ -32,6 +34,7 @@
   -->
 <page
   id="gridview-media-page"
+  title="&gridview.prefs.title;"
   xmlns:html="http://www.w3.org/1999/xhtml"
   xmlns:rdf="http://www.w3.org/TR/WD-rdf-syntax#"
   xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"

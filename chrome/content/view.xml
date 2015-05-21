@@ -93,20 +93,99 @@
           return this._innerContent;
         </getter>
       </property>
+      <method name="FixArtist">
+        <parameter name="aArtistName"/>
+        <body><![CDATA[
+          var pI = Cc["@songbirdnest.com/Songbird/Properties/Info/Text;1"]
+            .createInstance(Ci.sbITextPropertyInfo);
+          return pI.makeSortable(aArtistName).toLowerCase();
+        ]]></body>
+      </method>
+  
+}
+      <method name="addArtist">
+        <parameter name="aAlbum"/>
+        <parameter name="aNode"/>
+        <body><![CDATA[
+          var xulns = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
+          var ele = document.createElementNS(xulns,"artist");
+          if (aNode)
+            this.innerContent.insertBefore(ele,aNode);
+          else
+            this.innerContent.appendChild(ele);
+          ele.init(aAlbum.artist);
+          ele.addAlbum(aAlbum);
+        ]]></body>
+      </method>
       <method name="addAlbum">
         <parameter name="aAlbum"/>
         <body><![CDATA[
           var last = this.innerContent.lastChild;
-          if (last && last.type=="artist" && last.artist==aAlbum.artist){
+          if (last && last.type=="artist" && last.artist && aAlbum.artist &&
+              this.FixArtist(last.artist)==this.FixArtist(aAlbum.artist)){
             last.addAlbum(aAlbum);
           } else {
-            var xulns = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
-            var ele = document.createElementNS(xulns,"artist");
-            this.innerContent.appendChild(ele);
-            ele.init(aAlbum.artist);
-            ele.addAlbum(aAlbum);
+            this.addArtist(aAlbum);
             
             this.alphabet.checkEle(ele);
+          }
+        ]]></body>
+      </method>
+      
+      <method name="insertItem">
+        <parameter name="aItem"/>
+        <body><![CDATA[
+          var artist = this.FixArtist(aItem.artist);
+          var node = this.innerContent.firstChild;
+          while (node && this.FixArtist(node.artist)<artist){
+            node=node.nextSibling;
+          }
+          if (node && this.FixArtist(node.artist)==artist){
+            if (node.albums.some(function(ele){
+              var match = (ele.name.toLowerCase()==aItem.name.toLowerCase());
+              if (match)
+                node.updateAlbumImage(aItem);
+              return match;
+            })){
+              return;
+            }
+            node.addAlbum(aItem);
+          } else {
+            this.addArtist(aItem,node);
+          }
+        ]]></body>
+      </method>
+      <method name="updateAlbumImage">
+        <parameter name="aItem"/>
+        <body><![CDATA[
+          dump("updateAlbumImage: "+aItem.name+"\n");
+          var artist = this.FixArtist(aItem.artist);
+          var node = this.innerContent.firstChild;
+          while (node && this.FixArtist(node.artist)<artist){
+            node=node.nextSibling;
+          }
+          if (node && this.FixArtist(node.artist)==artist){
+            node.updateAlbumImage(aItem);
+          } else {
+            this.addArtist(aItem,node);
+          }
+        ]]></body>
+      </method>
+      <method name="removeAlbum">
+        <parameter name="aAlbum"/>
+        <body><![CDATA[
+          var artist = this.FixArtist(aAlbum.artist);
+          var node = this.innerContent.firstChild;
+          while (node && this.FixArtist(node.artist)<artist){
+            node=node.nextSibling;
+          }
+          if (node && this.FixArtist(node.artist)==artist){
+            if (node.albums.length==1)
+              this.innerContent.removeChild(node);
+            else
+              node.removeAlbum(aAlbum);
+          } else {
+            
           }
         ]]></body>
       </method>
@@ -144,7 +223,13 @@
           }
           //add the current artist to the list
           artists.push(aEle.artist);
-          filters.set(this._artistFilter,artists,artists.length);
+          try{
+            filters.set(this._artistFilter,artists,artists.length);
+          }catch(e){
+            Components.utils.reportError(e);
+            dump(e+"\n");
+            dump("artists: "+artists+"\n");
+          }
         ]]>
         </body>
       </method>
@@ -289,17 +374,12 @@
             }
           }
           let (self = this){
-            function FixArtist(aArtist){
-              var pI = Cc["@songbirdnest.com/Songbird/Properties/Info/Text;1"]
-         		    .createInstance(Ci.sbITextPropertyInfo);
-              return pI.makeSortable(aArtist);
-            }
             self.artists = ArtistGenerator();
             var node = this.innerContent.firstChild;
             var count = 0, limit = 10;
             function increment(){
               if (self.artists){
-                var artist;
+                var artist = null;
                 try{
                   artist = self.artists.next();
                 }catch(e){
@@ -307,8 +387,8 @@
                 }
                 //dump("artist: "+artist+" node: "+node+"\n");
                 if (artist && node){
-                  artist = FixArtist(artist);
-                  while(node && FixArtist(node.artist)<artist){
+                  artist = self.FixArtist(artist);
+                  while(node && self.FixArtist(node.artist)<artist){
                     node.collapsed = true;
                     node=node.nextSibling;
                   }
@@ -584,7 +664,7 @@
           function FixArtist(aArtist){
             var pI = Cc["@songbirdnest.com/Songbird/Properties/Info/Text;1"]
               .createInstance(Ci.sbITextPropertyInfo);
-            return pI.makeSortable(aArtist);
+            return pI.makeSortable(aArtist).toLowerCase();
           }
           function checkBeginEle(aEle){
             if (!aEle || aEle.collapsed)
@@ -929,36 +1009,61 @@
         <parameter name="aAlbum"/>
         <body>
         <![CDATA[
-          this.albums.push(aAlbum);
-          if (this.albums.length>=6)
-            return;//don't redraw
-          //move the default covers to the back of the list because they don't represent
-          //what the artist looks like
-          if (this.albums.length>1){
-            var end = this.albums.length;
-            for (i=0;i<end;i++){
-              //dump("name: "+this.albums[i].artist+" - "+this.albums[i].name+"\n");
-              //dump("img: "+this.albums[i].image+"\n");
-              if (this.albums[i].image==window.mediaPage.defaultCover){
-                //dump("moving album to back\n");
-                var album = this.albums.splice(i,1);
-                this.albums.push(album);
-                end--;
+          if (aAlbum && aAlbum.name){
+            var added = false;
+            for (var i=0;i<this.albums.length;i++){
+              if (this.albums[i].name.toLowerCase() == aAlbum.name.toLowerCase()){
+                this.albums[i] = aAlbum;
+                added = true;
+                break;
               }
             }
+            if (!added){
+              if ((!aAlbum.image || aAlbum.image == window.mediaPage.defaultCover))
+                this.albums.push(aAlbum);
+              else
+                this.albums.splice(0,0,aAlbum);
+            }
           }
-          try{
+          if (this.albums.length<=6)
+            this.drawAlbums();
+        ]]>
+        </body>
+      </method>
+      <method name="removeAlbum">
+        <parameter name="aAlbum"/>
+        <body>
+        <![CDATA[
+          if (aAlbum && aAlbum.name && aAlbum.name!=""){
+            for (var i=0;i<this.albums.length;i++){
+              if (this.albums[i].name.toLowerCase()==aAlbum.name.toLowerCase())
+                this.albums.splice(i,1);
+            }
+          }
+          this.drawAlbums(true);
+        ]]>
+        </body>
+      </method>
+      <method name="drawAlbums">
+        <parameter name="clear"/>
+        <body><![CDATA[
+        try{
           var canvas = document.getAnonymousElementByAttribute
                             (this,"anonid","albumPile");
           var bcanvas = document.getAnonymousElementByAttribute
                             (this,"anonid","borderCanvas");
           var defaultImage = "chrome://songbird/skin/album-art/default-cover.png";
           var ctx = canvas.getContext("2d");
+          
           var bctx = bcanvas.getContext("2d");
           bctx.strokeStyle = "rgb(0, 0, 0)";
           bctx.lineWidth = 4;
           
-          var size = 100;
+          if (clear){
+            ctx.clearRect(0,0,this._size,this._size);
+            bctx.clearRect(0,0,this._size,this._size);
+          }
+          var size = 100;//Smaller than the real size because we need to rotate the albums
           var x=(this._size-size)/2;
           var y=x;
           function draw(degree,image){
@@ -999,23 +1104,48 @@
           var albums = this.albums;
           function drawAlbum(i){
             let (img = new Image()){
+              var src;
+              if (i<0||!albums[i].image)
+                src = window.mediaPage.defaultCover;
+              else
+                src = albums[i].image;
               function imgloaded(){
                 draw(0-i*10,img);
                 if (i>0)
                   drawAlbum(i-1);
               }
               img.onload = imgloaded;
-              img.src = albums[i].image;
+              img.src = src;
               if (img.complete)
                 imgloaded();
             }
           }
           drawAlbum(this.albums.length-1);
-          }catch(e){
-            dump(e+"\n");
+        }catch(e){
+          dump(e+"\n");
+        }
+        ]]></body>
+      </method>
+      <method name="updateAlbumImage">
+        <parameter name="aAlbum" />
+        <body><![CDATA[
+          dump("artist updateAlbumImage: "+aAlbum+"\n");
+          var found=false;
+          for (var i=0;i<this.albums.length;i++){
+            dump("album: "+this.albums[i].name+" / "+aAlbum.name+"\n");
+            if (this.albums[i].name.toLowerCase()==aAlbum.name.toLowerCase()){
+              this.albums.splice(i,1);
+              if (aAlbum.image && aAlbum.image!=window.mediaPage.defaultCover)
+                this.albums.splice(0,0,aAlbum);
+              else
+                this.albums.push(aAlbum);
+              found=true;
+              break;
+            }
           }
-        ]]>
-        </body>
+          dump("albumimage updated, not previous album");
+          this.drawAlbums(true);
+        ]]></body>
       </method>
       <method name="playArtist">
         <parameter name="aEvent" />

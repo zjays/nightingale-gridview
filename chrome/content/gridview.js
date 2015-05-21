@@ -27,8 +27,12 @@ window.mediaPage.initViewElement = function MF_initiateElement(){
     this._artistFilter = filters.appendFilter(SBProperties.artistName);
   }
   
-  this.sort(); 
-  this.view.mediaListView = this.mediaListView.clone();
+  this.sort();
+  try{
+    this.view.mediaListView = this.mediaListView.clone();
+  } catch(e){
+    this.view.mediaListView = this.mediaListView.mediaList.createView();
+  }
   //this.view.mediaListView.addListener(this.view.listener);
   
   this.initiated = true;
@@ -92,7 +96,7 @@ window.mediaPage.selectAlbumInViewEle = function MF_selectAlbumInViewEle(mAlbum,
   
 }
 /*
-  Creates the album item passed to the flow object for the album associated with
+  Creates the album item passed to the view object for the album associated with
   this mediaitem. The album item is used to keep track of all information the
   flow will need to know about a specific album
 */
@@ -101,14 +105,13 @@ window.mediaPage._getAlbumItemFromMediaItem = function MF_getAlbumItemFromMediaI
     return null;
   var item = new Album(aMediaItem);
   if (item.name == null || item.name == "") {
-    return null;
+    item.name = "";
+    if (!item.artist || item.artist == "")
+      return null;
   }
-  var mLocation = aMediaItem.getProperty(SBProperties.contentURL);
-  if (mLocation.indexOf("file://") != 0) {
-    return null;
-  }
+  
+
   item.node=aMediaItem;
-  item.location = mLocation;
   item.image = this._getAlbumArtFromMediaItem(aMediaItem);
   return item;
 }
@@ -135,50 +138,11 @@ window.mediaPage._insertAlbum = function MF_insertAlbum(aMediaItem, aIndex){
   }
 }
 
-window.mediaPage.removeAlbumFromViewEle = function MF_removeAlbumFromViewEle(aAlbum){
-  /* That was the last track for the album, remove it from the flow */
-  var index = 0;//this._getAlbumIndexInFlow(aAlbum);
-  if (index != -1){
-    //this._flow.removeIndex(index);
-    //this._flow.glideToIndex(index-1);
-  }
-  /**
-   * Merges the neighboring albums together if they are the same
-   * @param index is the index removed
-   */
-  function mergeSameAlbums(idx){
-    //make sure we don't need to merge surrounding albums
-    var belowIndex = idx-1, aboveIndex=idx;//index is above because it shifts down when we remove the element at index
-    var below=null, above = null;
-    if (belowIndex>-1)
-      below = window.mediaPage._flow.itemProps[belowIndex].other;//get the album
-    else
-      return;
-    if (aboveIndex<window.mediaPage._flow.itemProps.length)
-      above = window.mediaPage._flow.itemProps[aboveIndex].other;//get the album}
-    else
-      return;
-    if ((below!=null && above!=null) && below.equals(above)){
-      //remove above so we merge the albums
-      mergeSameAlbums(belowIndex);
-      mergeSameAlbums(aboveIndex+1);
-      
-      window.mediaPage._flow.removeIndex(aboveIndex);
-      window.mediaPage._flow.glideToIndex(aboveIndex-1);
-    }
-  }
-  //mergeSameAlbums(index);
-}
+/* The view will take care of most of this, just convert froma mediaitem to an album */
 window.mediaPage.updateAlbumImage = function MF_updateAlbumImage(aMediaItem){
-  var mAlbum = new Album(aMediaItem);
-  //dump("item updated: "+mAlbum.name+"\n");
-  var index = -1;//this._getAlbumIndexInFlow(mAlbum);
-  //dump("index: "+index+"\n");
-  if (index!=-1){
-    //var node = this._flow.itemNodes[index];
-    //var item = this._getAlbumItemFromMediaItem(node);
-    var item = this._getAlbumItemFromMediaItem(aMediaItem);
-    //this._flow.replaceIndex(index,item);
+  var item = this._getAlbumItemFromMediaItem(aMediaItem);
+  if (item){
+    this.view.updateAlbumImage(item);
   }
 }
 /**

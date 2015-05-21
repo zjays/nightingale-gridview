@@ -64,7 +64,7 @@
     </menupopup>
   </popupset>
   <view id="birdview"/>
-  <sb-smart-splitter id="view-splitter" collapse="before" resizebefore="closest" resizeafter="closest"
+  <sb-smart-splitter id="view-splitter" collapse="after" resizebefore="closest" resizeafter="closest"
       oncommand="window.mediaPage.onResize(event);">
     <grippy/>
   </sb-smart-splitter>

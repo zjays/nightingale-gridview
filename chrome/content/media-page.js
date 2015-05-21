@@ -167,7 +167,6 @@ window.mediaPage = {
     this.unloadViewElement();
     
     if (this._playlist) {
-      this._playlist.removeEventListener("keypress",this.onPlaylistKeyPress,true);
       this._playlist.getListView().selection.removeListener(this);
       this._playlist.destroy();
       this._playlist = null;
@@ -299,16 +298,15 @@ window.mediaPage = {
     this will also need to be changed to adjust for multiple albums with the same
     name
   */
-  removeAlbum: function MF_removeAlbum(aAlbum){
+  removeItem: function MF_removeItem(aItem){
     var view = this._playlist.getListView();
-    var items = view.mediaList.getItemsByProperty(
-                               SBProperties.albumName, aAlbum.name);
+    var items = view.mediaList.getItemsByProperty(aItem.property, aItem.name);
     var itr = items.enumerate();
     while (itr.hasMoreElements()){
       var item = itr.getNext();
-      if (new Album(item).equals(aAlbum)){//Make sure it is from the same album/artist
+      //if (new Album(item).equals(aAlbum)){//Make sure it is from the same album/artist
         view.mediaList.remove(item);
-      }
+      //}
     }
   },
 
@@ -438,59 +436,40 @@ window.mediaPage = {
     }
   },
   
-  _processAlbumChanged : function MF_processAlbumChanged(aAlbum){
-    if (aAlbum && aAlbum.name!=""){
-      var items = null;
-      try{
-        items = this._mediaListView.mediaList.getItemsByProperty(
-                              SBProperties.albumName, aAlbum.name);
-      }catch(e){}
-      var length = 0;
-      //We need to compute the length manually because there may be
-      //several albums with the same name but different artists
-      if (items){
-        var itr = items.enumerate();
-        //stop if the length is 2 because we are only interesting in
-        //finding out if the last modified album was the last remaining track
-        //belonging to this album
-        while (itr.hasMoreElements() && length<5){
-          var item = itr.getNext();
-          if (new Album(item).equals(aAlbum)){
-            length++;
-          }
-        }
-      }
-      if (!items || length<1){
-        this.removeAlbumFromViewEle(aAlbum);
-      }
+  /**
+   * Check if this was the last media item in the album and remove it.
+   */
+  itemRemovedFromAlbum: function(aMediaList, artist, album){
+    
+    var propArray = Cc['@songbirdnest.com/Songbird/Properties/MutablePropertyArray;1']
+      .createInstance(Ci.sbIPropertyArray);
+    propArray.appendProperty(SBProperties.artistName, artist);
+    propArray.appendProperty(SBProperties.albumName, album);
+    try{
+      var items = aMediaList.getItemsByProperties(propArray);
+      //dump("items: "+items+" len: "+items.length+"\n");
+    } catch(e){
+      this.view.removeAlbum(new Album(album, artist));
     }
   },
-
+  
   /* sbIMediaListListener */
+  
+  /**
+   * \brief Called when a media item is added to the list.
+   * \param aMediaList The list that has changed.
+   * \param aMediaItem The new media item.
+   * \param aIndex The index in the list where the new item was added
+   * \return True if you do not want any further onItemAdded notifications for
+   *         the current batch.  If there is no current batch, the return value
+   *         is ignored.
+   */
   onItemAdded: function MFL_onItemAded(aMediaList, aMediaItem, aIndex){
-    /* add this album to the flow if it is missing */
+    /* add this album if it is missing */
     try{
-    var aAlbum = new Album(aMediaItem);
-    //dump("mAlbum: "+mAlbum+"\n");
-    if (aAlbum && aAlbum.name!=null && aAlbum.name !=""){
-      var view = this.mediaListView;
-      var len = view.length;
-      var pAlbum = null;
-      var index = -1;
-      
-      for (var i = 0;i<len && (aIndex==-1 || i<=aIndex);i++){
-        var item = view.getItemByIndex(i);
-        var mAlbum = new Album(item);
-        if (mAlbum!="" && !mAlbum.equals(pAlbum)){
-          index++;
-        }
-        if (aAlbum.equals(mAlbum)){
-          return;
-        }
-        pAlbum = mAlbum;
-      }
-      this._insertAlbum(aMediaItem, index);
-    }
+      var item = this._getAlbumItemFromMediaItem(aMediaItem);
+      if (item)
+        this.view.insertItem(item);
     }catch(e){
       dump("added err: "+e+"\n")
     }
@@ -504,10 +483,21 @@ window.mediaPage = {
   onAfterItemRemoved: function MFL_onAfterItemRemoved(aMediaList, aMediaItem,
                                                                       aIndex){
     var mAlbum = new Album(aMediaItem);
-    this._processAlbumChanged(mAlbum);
+    this.itemRemovedFromAlbum(aMediaList,mAlbum.artist,mAlbum.name);
+    //this._processAlbumChanged(mAlbum);
   },
-
+  /**
+   * \brief Called when a media item is changed.
+   * \param aMediaList The list that has changed.
+   * \param aMediaItem The item that has changed.
+   * \param aProperties Array of properties that were updated.  Each property's
+   *        value is the previous value of the property
+   * \return True if you do not want any further onItemUpdated notifications
+   *         for the current batch.  If there is no current batch, the return
+   *         value is ignored.
+   */
   onItemUpdated: function MFL_onItemUpdated(aMediaList, aMediaItem, aProperties){
+    
     var props = {};
     //Build a map with name,value pairs
     for (var i = 0; i<aProperties.length; i++){//Look through the list of properties that were changed
@@ -517,28 +507,36 @@ window.mediaPage = {
     
     //Build album with newest data first
     var oldalbum = new Album(aMediaItem);
-    var albumChanged = false;
     //See if there is older data to replace the new data with
-    if (props[SBProperties.albumName]!=null){
-      oldalbum.name = props[SBProperties.albumName];
-      albumChanged = true;
+    var usedAlbumArtist = false;
+    var albumChanged = false;
+    if (SBProperties.albumArtistName in props){
+      if (!Album.prototype.ignoreAlbumArtist){
+        var aartist = props[SBProperties.albumArtistName];
+        if (aartist!=""){
+          oldalbum.artist = aartist;
+          usedAlbumArtist = true;
+          albumChanged = true;
+        }
+      }
     }
-    if (props[SBProperties.albumArtistName]!=null && props[SBProperties.albumArtistName]!=""){
-      oldalbum.artist = props[SBProperties.albumArtistName];
-      albumChanged = true;
-    } else if (props[SBProperties.artistName]!=null){
+    if (SBProperties.artistName in props && !usedAlbumArtist){
       oldalbum.artist = props[SBProperties.artistName];
       albumChanged = true;
     }
-    /* are there still albums with this old album? If not, remove it */
+    if (SBProperties.albumName in props){
+      oldalbum.name = props[SBProperties.albumName];
+      albumChanged = true;
+    }
+    // are there still albums with this old album? If not, remove it 
     if (albumChanged){
-      this._processAlbumChanged(oldalbum);
-      this.onItemAdded(aMediaList, aMediaItem,
-                       this.mediaListView.getIndexForItem(aMediaItem));
+      this.itemRemovedFromAlbum(aMediaList,oldalbum.artist,oldalbum.name);
+      this.onItemAdded(aMediaList, aMediaItem,-1);
     } //onItemAdded will handle updating the album image
-    else if (props[SBProperties.primaryImageURL]!=null){
+    else if (SBProperties.primaryImageURL in props){
       this.updateAlbumImage(aMediaItem);
     }
+    return false;
   },
 
   onItemMoved: function MFL_onItemMoved(aMediaList, aFromIndex, aToIndex){
@@ -691,7 +689,7 @@ function Album(arg1,artist,albumartist) {
   if (typeof arg1 == 'string'){
     this.name = arg1;
     if (typeof artist == 'string')
-      if (typeof albumartist == 'string' && albumartist!="")
+      if (!this.ignoreAlbumArtist && typeof albumartist == 'string' && albumartist!="")
         this.artist = albumartist;
       else
         this.artist = artist;

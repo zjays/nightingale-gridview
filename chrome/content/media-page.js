@@ -359,6 +359,15 @@ window.mediaPage = {
     if (!this._albumArtService && mAlbumArtUrl == aamNoCover){
       mAlbumArtUrl = null;
     }
+    try{  
+      var ios = Components.classes["@mozilla.org/network/io-service;1"].
+            getService(Components.interfaces.nsIIOService);
+      var fileurl = ios.newURI(mAlbumArtUrl, null, null);
+      if (fileurl instanceof Components.interfaces.nsIFileURL && !fileurl.file.exists())
+        mAlbumArtUrl = null;
+    }catch(e){
+      
+    }
     if (mAlbumArtUrl == null || mAlbumArtUrl == "") {
       if (this._albumArtService){
         // We don't have a cover for this yet so get the albumArtService to check

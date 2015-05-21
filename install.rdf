@@ -5,15 +5,15 @@
     <em:id>{5dc6b560-2fc5-11de-8c30-0800200c9a66}</em:id>
     <em:type>2</em:type>
     <em:name>Grid View</em:name>
-    <em:version>0.3</em:version>
+    <em:version>0.4</em:version>
     <em:creator>John Marshall</em:creator>
     <em:description>Displays albums grouped by artist</em:description>
-
+    <em:iconURL>chrome://gridview/skin/icon.png</em:iconURL>
     <em:targetApplication>
       <Description>
         <em:id>songbird@songbirdnest.com</em:id>
         <em:minVersion>1.2.0</em:minVersion>
-        <em:maxVersion>1.3.0a</em:maxVersion>
+        <em:maxVersion>1.6.0a</em:maxVersion>
       </Description>
     </em:targetApplication>
 

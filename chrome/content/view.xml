@@ -15,7 +15,7 @@
       <stylesheet src="chrome://gridview/skin/view.css"/>
     </resources>
     <content flex="1" orient="vertical">
-      <xul:hbox>
+      <xul:hbox anonid="alphabetHeader">
         <xul:spacer flex="1"/>
         <xul:alphabet anonid="alphabet"/>
         <xul:spacer flex="1"/>
@@ -30,6 +30,10 @@
       <field name="alphabet">null</field>
       <field name="artists">null</field>
       <field name="_artistFilter">-1</field>
+	  <field name="alphabetHeader"><![CDATA[
+      document.getAnonymousElementByAttribute(this, "anonid", "alphabetHeader")
+      ]]>
+	  </field>
       <constructor><![CDATA[
         //setup alphabet
         dump("view load\n");
@@ -599,6 +603,10 @@
           return this._viewPosIndicator;
         </getter>
       </property>
+	  <field name="alphabetContainer"><![CDATA[
+      document.getAnonymousElementByAttribute(this, "anonid", "alphabetContainer")
+      ]]>
+	  </field>
       <constructor><![CDATA[
         //setup alphabet
         try{

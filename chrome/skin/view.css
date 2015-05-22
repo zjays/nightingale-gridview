@@ -1,16 +1,20 @@
 view{
-  background-color: rgb(50,50,50);
+  background-color: rgb(102,102,102);
 }
 artist, album{
   /*-moz-border-radius: 15px 15px 15px 15px;*/
 }
 album[hover],
 artist[hover] {
-  background-color: rgb(75,75,75);
+  background-color: rgb(125,125,125);
 }
 view album[selected="true"],
 view artist[selected="true"]{
-  background-color: rgb(100,100,100);
+  background-color: rgb(104,134,158);
+}
+view album[hover][selected="true"],
+view artist[hover][selected="true"]{
+  background-color: rgb(78,136,184);
 }
 view[hideHover] album[hover][selected="false"],
 view[hideHover] artist[hover][selected="false"]{
@@ -51,17 +55,21 @@ artist[selected="true"] .borderCanvas{
   -moz-box-align: center;
 }
 .playButton {
-  border: 1px solid #878787;
-  -moz-opacity: 0.80;
+  border: 1px solid #666666;
+  opacity: 0.85;
   -moz-border-radius: 25px;
-  background-color: #DCDCDC;
+  background-color: rgb(125,125,125);
   padding-left: 5px;
   padding-right: 5px;
   -moz-box-pack: center;
   -moz-box-align: center;
 }
+.playButton:hover{
+  opacity: 1;
+}
 .playButtonLabel {
-  font-size: 8px !important;
+  font: message-box !important;
+  font-size: 9px !important; 
 }
 .playButtonImage{
   width: 12px;
@@ -72,10 +80,11 @@ artist[selected="true"] .borderCanvas{
  */
 .artistName {
   margin: 0px !important;
+  font: message-box !important;
   font-weight: bold !important;
-  font-size: 10px !important;
+  font-size: 11px !important;
   text-align: center;
-  color: white !important;
+  color: rgb(238,238,239) !important;
   padding: 0 4px 0 4px;
 }
 
@@ -88,13 +97,35 @@ artist[selected="true"] .borderCanvas{
   text-align: center;
 }
 .letter {
-  color: white !important;
-  margin: 0;
-  padding: 3px;
+  color: rgb(238,238,239) !important;
+  padding-left: 3px;
+  padding-right: 3px;
+  font: message-box !important;
+  font-size: 11px !important;
+  font-weight: bold !important;
+}
+.letter:hover{
+  cursor: pointer !important; 
 }
 .viewPosIndicator{
-  background-color: black;
+  background-image: url("chrome://gridview/skin/alphabet-viewposindicator.png");
+  max-height: 19px;
+  min-height: 19px;
 }
-alphabet{
-  
+alphabet:hover{
+background-image: url("chrome://gridview/skin/alphabet-hover.png");
+/*necessary because otherwise background would fill larger vertical height of alphabetContainer (see comment below)*/
+background-repeat: repeat-x;
+}
+[anonid="alphabetHeader"] {
+  background-image: url("chrome://gridview/skin/alphabet-header.png");
+  max-height: 19px;
+  min-height: 19px;
+}
+[anonid="alphabetContainer"] {
+  -moz-box-align: center;
+  /*convoluted way of getting letters to stay vertically aligned in alphabet header, when zooming in :( */   
+  max-height: 38px;
+  min-height: 38px; 
+  margin-top: -10px;
 }

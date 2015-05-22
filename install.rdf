@@ -5,7 +5,7 @@
     <em:id>{5dc6b560-2fc5-11de-8c30-0800200c9a66}</em:id>
     <em:type>2</em:type>
     <em:name>Grid View</em:name>
-    <em:version>0.5.1.inofficial-patched</em:version>
+    <em:version>0.5.2</em:version>
     <em:creator>John Marshall</em:creator>
     <em:description>Displays albums grouped by artist</em:description>
     <em:iconURL>chrome://gridview/skin/icon.png</em:iconURL>
